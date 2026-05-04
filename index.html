@@ -27,10 +27,12 @@
         <button class="branch-btn" data-branch="branch1">Сибирский</button>
         <button class="branch-btn" data-branch="branch2">Фреско</button>
         <button class="branch-btn" data-branch="branch3">Гелион</button>
-        
       </nav>
 
       <div class="header__actions">
+        <!-- Индикатор синхронизации Firebase -->
+        <span class="sync-indicator sync--connecting" id="syncIndicator">⏳ Подключение...</span>
+
         <button class="btn-icon" id="printBtn" title="Печать отчёта">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="6 9 6 2 18 2 18 9"/>
@@ -197,7 +199,7 @@
         <h3 class="branches-qty-title">Остатки по филиалам</h3>
         <div class="branches-qty-grid">
           <div class="branch-qty-item">
-            <label>Филиал 1</label>
+            <label>Сибирский</label>
             <div class="qty-stepper">
               <button class="qty-btn" data-action="minus" data-target="qty1">−</button>
               <input type="number" id="qty1" class="qty-input" value="0" min="0" />
@@ -205,7 +207,7 @@
             </div>
           </div>
           <div class="branch-qty-item">
-            <label>Филиал 2</label>
+            <label>Фреско</label>
             <div class="qty-stepper">
               <button class="qty-btn" data-action="minus" data-target="qty2">−</button>
               <input type="number" id="qty2" class="qty-input" value="0" min="0" />
@@ -213,19 +215,11 @@
             </div>
           </div>
           <div class="branch-qty-item">
-            <label>Филиал 3</label>
+            <label>Гелион</label>
             <div class="qty-stepper">
               <button class="qty-btn" data-action="minus" data-target="qty3">−</button>
               <input type="number" id="qty3" class="qty-input" value="0" min="0" />
               <button class="qty-btn" data-action="plus" data-target="qty3">+</button>
-            </div>
-          </div>
-          <div class="branch-qty-item">
-            <label>Филиал 4</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="qty4">−</button>
-              <input type="number" id="qty4" class="qty-input" value="0" min="0" />
-              <button class="qty-btn" data-action="plus" data-target="qty4">+</button>
             </div>
           </div>
         </div>
@@ -333,6 +327,7 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <!-- Firebase через ES модуль — обязательно type="module" -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
