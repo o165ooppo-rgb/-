@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Склад — Управление остатками</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- ===== HEADER ===== -->
+  <header class="header">
+    <div class="header__inner">
+      <div class="header__brand">
+        <svg class="header__logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="#FF6B35"/>
+          <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span class="header__title">СкладПро</span>
+      </div>
+
+      <nav class="branches" id="branches">
+        <button class="branch-btn active" data-branch="all">Все филиалы</button>
+        <button class="branch-btn" data-branch="branch1">Филиал 1</button>
+        <button class="branch-btn" data-branch="branch2">Филиал 2</button>
+        <button class="branch-btn" data-branch="branch3">Филиал 3</button>
+        <button class="branch-btn" data-branch="branch4">Филиал 4</button>
+      </nav>
+
+      <div class="header__actions">
+        <button class="btn-icon" id="printBtn" title="Печать отчёта">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span>Печать</span>
+        </button>
+        <button class="btn-add" id="addProductBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Добавить товар
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== SEARCH + FILTER BAR ===== -->
+  <div class="toolbar">
+    <div class="toolbar__inner">
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="searchInput" class="search-input" placeholder="Поиск по товарам..." />
+      </div>
+      <div class="filter-group">
+        <select id="categoryFilter" class="filter-select">
+          <option value="all">Все категории</option>
+          <option value="drinks">Напитки</option>
+          <option value="disposable">Одноразовая посуда</option>
+          <option value="food">Продукты</option>
+          <option value="cleaning">Чистящие средства</option>
+          <option value="other">Прочее</option>
+        </select>
+        <select id="sortFilter" class="filter-select">
+          <option value="name">По названию</option>
+          <option value="qty-asc">Кол-во: меньше → больше</option>
+          <option value="qty-desc">Кол-во: больше → меньше</option>
+        </select>
+      </div>
+      <div class="stats-bar">
+        <span id="statsText">Товаров: 0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN GRID ===== -->
+  <main class="main">
+    <div class="products-grid" id="productsGrid">
+      <!-- Cards rendered by JS -->
+    </div>
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="20" width="60" height="45" rx="6" stroke="#ccc" stroke-width="3"/>
+        <path d="M25 20V16a15 15 0 0130 0v4" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
+        <line x1="30" y1="42" x2="50" y2="42" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <p>Товары не найдены</p>
+      <span>Попробуйте изменить фильтры или добавьте новый товар</span>
+    </div>
+  </main>
+
+  <!-- ===== MODAL: VIEW PRODUCT ===== -->
+  <div class="modal-overlay" id="viewModal">
+    <div class="modal modal--view">
+      <button class="modal__close" id="viewModalClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <div class="modal__image-wrap">
+        <img id="viewImg" src="" alt="" />
+        <div class="modal__badge" id="viewBadge"></div>
+      </div>
+      <div class="modal__body">
+        <div class="modal__category" id="viewCategory"></div>
+        <h2 class="modal__title" id="viewTitle"></h2>
+        <p class="modal__desc" id="viewDesc"></p>
+        <div class="modal__branches-grid" id="viewBranches"></div>
+        <div class="modal__total">
+          <span>Итого на всех филиалах:</span>
+          <strong id="viewTotal"></strong>
+        </div>
+        <div class="modal__actions">
+          <button class="btn-edit" id="viewEditBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            Редактировать
+          </button>
+          <button class="btn-delete" id="viewDeleteBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+            Удалить
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: ADD/EDIT PRODUCT ===== -->
+  <div class="modal-overlay" id="editModal">
+    <div class="modal modal--edit">
+      <button class="modal__close" id="editModalClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <h2 class="modal__heading" id="editModalTitle">Добавить товар</h2>
+
+      <div class="form-photo-upload" id="photoUploadArea">
+        <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none"/>
+        <div class="photo-placeholder" id="photoPlaceholder">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="10" width="40" height="30" rx="5" stroke="#aaa" stroke-width="2"/>
+            <circle cx="24" cy="25" r="8" stroke="#aaa" stroke-width="2"/>
+            <circle cx="24" cy="25" r="3" fill="#aaa"/>
+            <path d="M17 10l3-4h8l3 4" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Нажмите для загрузки фото</span>
+          <small>Или сделайте снимок камерой</small>
+        </div>
+        <img id="photoPreview" src="" alt="" style="display:none;" />
+        <button class="photo-remove-btn" id="photoRemoveBtn" style="display:none;">✕</button>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group form-group--full">
+          <label>Название товара <span class="required">*</span></label>
+          <input type="text" id="editName" placeholder="Например: Pepsi 0.5л" />
+        </div>
+        <div class="form-group">
+          <label>Категория</label>
+          <select id="editCategory">
+            <option value="drinks">Напитки</option>
+            <option value="disposable">Одноразовая посуда</option>
+            <option value="food">Продукты</option>
+            <option value="cleaning">Чистящие средства</option>
+            <option value="other">Прочее</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Единица измерения</label>
+          <select id="editUnit">
+            <option value="шт">шт</option>
+            <option value="уп">уп</option>
+            <option value="кг">кг</option>
+            <option value="л">л</option>
+            <option value="коробка">коробка</option>
+          </select>
+        </div>
+        <div class="form-group form-group--full">
+          <label>Описание</label>
+          <textarea id="editDesc" rows="2" placeholder="Дополнительная информация о товаре..."></textarea>
+        </div>
+      </div>
+
+      <div class="branches-qty-section">
+        <h3 class="branches-qty-title">Остатки по филиалам</h3>
+        <div class="branches-qty-grid">
+          <div class="branch-qty-item">
+            <label>Филиал 1</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="qty1">−</button>
+              <input type="number" id="qty1" class="qty-input" value="0" min="0" />
+              <button class="qty-btn" data-action="plus" data-target="qty1">+</button>
+            </div>
+          </div>
+          <div class="branch-qty-item">
+            <label>Филиал 2</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="qty2">−</button>
+              <input type="number" id="qty2" class="qty-input" value="0" min="0" />
+              <button class="qty-btn" data-action="plus" data-target="qty2">+</button>
+            </div>
+          </div>
+          <div class="branch-qty-item">
+            <label>Филиал 3</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="qty3">−</button>
+              <input type="number" id="qty3" class="qty-input" value="0" min="0" />
+              <button class="qty-btn" data-action="plus" data-target="qty3">+</button>
+            </div>
+          </div>
+          <div class="branch-qty-item">
+            <label>Филиал 4</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="qty4">−</button>
+              <input type="number" id="qty4" class="qty-input" value="0" min="0" />
+              <button class="qty-btn" data-action="plus" data-target="qty4">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-footer">
+        <button class="btn-cancel" id="editCancelBtn">Отмена</button>
+        <button class="btn-save" id="editSaveBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+          </svg>
+          Сохранить
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: PASSWORD ===== -->
+  <div class="modal-overlay" id="passwordModal">
+    <div class="modal modal--password">
+      <button class="modal__close" id="passwordModalClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <div class="password-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="22" width="32" height="22" rx="5" fill="#FF6B35" opacity="0.1" stroke="#FF6B35" stroke-width="2"/>
+          <path d="M16 22v-6a8 8 0 0116 0v6" stroke="#FF6B35" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="24" cy="33" r="3" fill="#FF6B35"/>
+          <line x1="24" y1="36" x2="24" y2="40" stroke="#FF6B35" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h2>Введите пароль</h2>
+      <p>Для редактирования требуется пароль администратора</p>
+      <div class="password-input-wrap">
+        <input type="password" id="passwordInput" placeholder="Пароль..." />
+        <button id="passwordToggle" class="password-toggle" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+        </button>
+      </div>
+      <div class="password-error" id="passwordError" style="display:none;">Неверный пароль. Попробуйте снова.</div>
+      <button class="btn-save btn-save--full" id="passwordSubmitBtn">Войти</button>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM DELETE MODAL ===== -->
+  <div class="modal-overlay" id="confirmModal">
+    <div class="modal modal--confirm">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="#FF3B30" opacity="0.1" stroke="#FF3B30" stroke-width="2"/>
+          <line x1="24" y1="14" x2="24" y2="28" stroke="#FF3B30" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="24" cy="34" r="2" fill="#FF3B30"/>
+        </svg>
+      </div>
+      <h2>Удалить товар?</h2>
+      <p id="confirmText">Это действие нельзя отменить.</p>
+      <div class="confirm-btns">
+        <button class="btn-cancel" id="confirmCancelBtn">Отмена</button>
+        <button class="btn-delete-confirm" id="confirmDeleteBtn">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST NOTIFICATION ===== -->
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== PRINT AREA ===== -->
+  <div class="print-area" id="printArea" style="display:none;">
+    <div class="print-header">
+      <div class="print-logo">
+        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
+          <rect width="36" height="36" rx="10" fill="#FF6B35"/>
+          <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <strong>СкладПро</strong>
+      </div>
+      <div class="print-meta">
+        <div id="printBranchLabel">Все филиалы</div>
+        <div id="printDate"></div>
+      </div>
+    </div>
+    <h1 class="print-title" id="printTitle">Отчёт по остаткам</h1>
+    <table class="print-table" id="printTable">
+      <thead>
+        <tr>
+          <th style="width:60px">Фото</th>
+          <th>Товар</th>
+          <th>Категория</th>
+          <th>Филиал 1</th>
+          <th>Филиал 2</th>
+          <th>Филиал 3</th>
+          <th>Филиал 4</th>
+          <th>Итого</th>
+        </tr>
+      </thead>
+      <tbody id="printTableBody"></tbody>
+    </table>
+    <div class="print-footer">
+      <div>Сформировано: <span id="printFooterDate"></span></div>
+      <div>Подпись: _______________________</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
