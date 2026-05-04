@@ -1,11 +1,37 @@
 /**
  * ========================================
  * СКЛАДПРО — СИСТЕМА УПРАВЛЕНИЯ ОСТАТКАМИ
- * app.js — Senior-level JavaScript
+ * app.js — с интеграцией Firebase Realtime Database
  * ========================================
  */
 
 'use strict';
+
+/* ================================================
+   FIREBASE CONFIG & INIT
+================================================ */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getDatabase,
+  ref,
+  onValue,
+  set,
+  remove,
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+
+const firebaseConfig = {
+  apiKey:            'AIzaSyD25nN75reCO5UOwwI1nLYtrZPX0dTa1Oo',
+  authDomain:        'warehouse-e09a0.firebaseapp.com',
+  projectId:         'warehouse-e09a0',
+  storageBucket:     'warehouse-e09a0.firebasestorage.app',
+  messagingSenderId: '1031869586497',
+  appId:             '1:1031869586497:web:073f87f1899a532c1f7ac0',
+  databaseURL:       'https://warehouse-e09a0-default-rtdb.firebaseio.com',
+};
+
+const firebaseApp  = initializeApp(firebaseConfig);
+const db           = getDatabase(firebaseApp);
+const PRODUCTS_REF = ref(db, 'products');
 
 /* ================================================
    CONSTANTS & CONFIG
@@ -22,13 +48,12 @@ const CATEGORY_LABELS = {
 };
 
 const BRANCH_LABELS = {
-  branch1: 'Филиал 1',
-  branch2: 'Филиал 2',
-  branch3: 'Филиал 3',
-  
+  branch1: 'Сибирский',
+  branch2: 'Фреско',
+  branch3: 'Гелион',
 };
 
-const BRANCH_KEYS = ['branch1', 'branch2', 'branch3',];
+const BRANCH_KEYS = ['branch1', 'branch2', 'branch3'];
 
 /* ================================================
    STATE
@@ -39,20 +64,18 @@ const state = {
   searchQuery:      '',
   categoryFilter:   'all',
   sortMode:         'name',
-  pendingAction:    null,   // { type: 'add' | 'edit' | 'delete', data? }
+  pendingAction:    null,
   editingProductId: null,
   currentViewId:    null,
   photoDataUrl:     null,
+  firebaseLoaded:   false,
 };
 
 /* ================================================
    UTILITY FUNCTIONS
 ================================================ */
-
-/** Generate unique ID */
 const uid = () => `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-/** Get total qty across branches for a product (optionally filtered by branch) */
 function getQty(product, branch = 'all') {
   if (branch === 'all') {
     return BRANCH_KEYS.reduce((sum, k) => sum + (product.branches[k] ?? 0), 0);
@@ -60,100 +83,161 @@ function getQty(product, branch = 'all') {
   return product.branches[branch] ?? 0;
 }
 
-/** Determine stock badge status */
 function getStockStatus(qty) {
   if (qty === 0) return 'out';
   if (qty <= 5)  return 'low';
   return 'ok';
 }
 
-/** Stock badge labels */
 const STOCK_BADGE = {
-  ok:  { label: 'В наличии',  cls: 'badge--ok'  },
-  low: { label: 'Мало',       cls: 'badge--low' },
-  out: { label: 'Нет',        cls: 'badge--out'  },
+  ok:  { label: 'В наличии', cls: 'badge--ok'  },
+  low: { label: 'Мало',      cls: 'badge--low' },
+  out: { label: 'Нет',       cls: 'badge--out' },
 };
 
-/** Save to localStorage */
-function saveData() {
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/* ================================================
+   LOCAL STORAGE (кэш / оффлайн-резерв)
+================================================ */
+function saveLocalCache() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.products));
   } catch (e) {
-    console.error('Storage error:', e);
+    console.warn('localStorage недоступен:', e);
   }
 }
 
-/** Load from localStorage */
-function loadData() {
+function loadLocalCache() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      state.products = JSON.parse(raw);
-    } else {
-      state.products = getDefaultProducts();
-      saveData();
-    }
+    return raw ? JSON.parse(raw) : null;
   } catch (e) {
-    state.products = getDefaultProducts();
+    return null;
   }
 }
 
-/** Demo products for first launch */
+/* ================================================
+   FIREBASE — ЗАПИСЬ / УДАЛЕНИЕ
+================================================ */
+async function fbSaveProduct(product) {
+  try {
+    await set(ref(db, `products/${product.id}`), product);
+  } catch (e) {
+    console.error('Firebase save error:', e);
+    showToast('⚠ Ошибка синхронизации с сервером', 'error');
+  }
+}
+
+async function fbDeleteProduct(productId) {
+  try {
+    await remove(ref(db, `products/${productId}`));
+  } catch (e) {
+    console.error('Firebase delete error:', e);
+    showToast('⚠ Ошибка удаления из сервера', 'error');
+  }
+}
+
+/* ================================================
+   FIREBASE — СЛУШАТЕЛЬ РЕАЛЬНОГО ВРЕМЕНИ
+================================================ */
+function initFirebaseListener() {
+  showSyncIndicator('connecting');
+
+  onValue(PRODUCTS_REF, (snapshot) => {
+    const data = snapshot.val();
+
+    if (data) {
+      // Firebase вернул данные
+      state.products = Object.values(data);
+    } else if (!state.firebaseLoaded) {
+      // Firebase пустой — первый запуск, заливаем демо-данные
+      const cached = loadLocalCache();
+      state.products = (cached && cached.length > 0) ? cached : getDefaultProducts();
+      state.products.forEach(p => fbSaveProduct(p));
+    } else {
+      // Всё удалено пользователем
+      state.products = [];
+    }
+
+    state.firebaseLoaded = true;
+    saveLocalCache();
+    renderAll();
+    showSyncIndicator('ok');
+
+  }, (error) => {
+    console.error('Firebase listener error:', error);
+    showSyncIndicator('error');
+
+    // Оффлайн — грузим из кэша
+    if (!state.firebaseLoaded) {
+      const cached = loadLocalCache();
+      state.products       = cached || getDefaultProducts();
+      state.firebaseLoaded = true;
+      renderAll();
+    }
+
+    showToast('⚠ Нет связи с сервером — работаем офлайн', 'error');
+  });
+}
+
+/* ================================================
+   SYNC INDICATOR
+================================================ */
+function showSyncIndicator(status) {
+  const el = document.getElementById('syncIndicator');
+  if (!el) return;
+  const map = {
+    connecting: { text: '⏳ Подключение...',  cls: 'sync--connecting' },
+    ok:         { text: '☁ Синхронизировано', cls: 'sync--ok'         },
+    error:      { text: '⚠ Офлайн',           cls: 'sync--error'      },
+  };
+  const s = map[status] || map.ok;
+  el.textContent = s.text;
+  el.className   = `sync-indicator ${s.cls}`;
+}
+
+/* ================================================
+   DEMO DATA
+================================================ */
 function getDefaultProducts() {
   return [
     {
-      id: uid(),
-      name: 'Pepsi 0.5л',
-      category: 'drinks',
-      unit: 'шт',
+      id: uid(), name: 'Pepsi 0.5л', category: 'drinks', unit: 'шт',
       description: 'Газированный напиток Pepsi, бутылка 0.5 литра',
-      photo: null,
-      branches: { branch1: 24, branch2: 8, branch3: 3, branch4: 0 },
+      photo: null, branches: { branch1: 24, branch2: 8, branch3: 3 },
     },
     {
-      id: uid(),
-      name: 'Coca-Cola 1л',
-      category: 'drinks',
-      unit: 'шт',
+      id: uid(), name: 'Coca-Cola 1л', category: 'drinks', unit: 'шт',
       description: 'Классическая Кока-Кола, бутылка 1 литр',
-      photo: null,
-      branches: { branch1: 12, branch2: 20, branch3: 15, branch4: 7 },
+      photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 },
     },
     {
-      id: uid(),
-      name: 'Пластиковые стаканы 250мл',
-      category: 'disposable',
-      unit: 'уп',
+      id: uid(), name: 'Пластиковые стаканы 250мл', category: 'disposable', unit: 'уп',
       description: 'Одноразовые стаканы, упаковка 100 штук',
-      photo: null,
-      branches: { branch1: 5, branch2: 2, branch3: 0, branch4: 4 },
+      photo: null, branches: { branch1: 5, branch2: 2, branch3: 0 },
     },
     {
-      id: uid(),
-      name: 'Трубочки для коктейлей',
-      category: 'disposable',
-      unit: 'уп',
+      id: uid(), name: 'Трубочки для коктейлей', category: 'disposable', unit: 'уп',
       description: 'Пластиковые трубочки, упаковка 500 штук',
-      photo: null,
-      branches: { branch1: 3, branch2: 0, branch3: 1, branch4: 2 },
+      photo: null, branches: { branch1: 3, branch2: 0, branch3: 1 },
     },
     {
-      id: uid(),
-      name: 'Сахар 1кг',
-      category: 'food',
-      unit: 'кг',
+      id: uid(), name: 'Сахар 1кг', category: 'food', unit: 'кг',
       description: 'Сахар-песок, пакет 1кг',
-      photo: null,
-      branches: { branch1: 10, branch2: 6, branch3: 4, branch4: 8 },
+      photo: null, branches: { branch1: 10, branch2: 6, branch3: 4 },
     },
     {
-      id: uid(),
-      name: 'Fairy 500мл',
-      category: 'cleaning',
-      unit: 'шт',
+      id: uid(), name: 'Fairy 500мл', category: 'cleaning', unit: 'шт',
       description: 'Средство для мытья посуды Fairy, 500мл',
-      photo: null,
-      branches: { branch1: 4, branch2: 4, branch3: 2, branch4: 1 },
+      photo: null, branches: { branch1: 4, branch2: 4, branch3: 2 },
     },
   ];
 }
@@ -161,8 +245,7 @@ function getDefaultProducts() {
 /* ================================================
    DOM REFS
 ================================================ */
-const $  = id => document.getElementById(id);
-const $$ = sel => document.querySelectorAll(sel);
+const $ = id => document.getElementById(id);
 
 const els = {
   grid:            $('productsGrid'),
@@ -173,7 +256,6 @@ const els = {
   sortFilter:      $('sortFilter'),
   branches:        $('branches'),
 
-  // View modal
   viewModal:       $('viewModal'),
   viewImg:         $('viewImg'),
   viewBadge:       $('viewBadge'),
@@ -186,7 +268,6 @@ const els = {
   viewDeleteBtn:   $('viewDeleteBtn'),
   viewModalClose:  $('viewModalClose'),
 
-  // Edit modal
   editModal:       $('editModal'),
   editModalTitle:  $('editModalTitle'),
   editModalClose:  $('editModalClose'),
@@ -199,14 +280,12 @@ const els = {
   qty1:            $('qty1'),
   qty2:            $('qty2'),
   qty3:            $('qty3'),
-  qty4:            $('qty4'),
   photoInput:      $('photoInput'),
   photoUploadArea: $('photoUploadArea'),
   photoPlaceholder:$('photoPlaceholder'),
   photoPreview:    $('photoPreview'),
   photoRemoveBtn:  $('photoRemoveBtn'),
 
-  // Password modal
   passwordModal:   $('passwordModal'),
   passwordInput:   $('passwordInput'),
   passwordSubmit:  $('passwordSubmitBtn'),
@@ -214,20 +293,15 @@ const els = {
   passwordError:   $('passwordError'),
   passwordToggle:  $('passwordToggle'),
 
-  // Confirm modal
   confirmModal:    $('confirmModal'),
   confirmText:     $('confirmText'),
   confirmCancel:   $('confirmCancelBtn'),
   confirmDelete:   $('confirmDeleteBtn'),
 
-  // Toast
-  toast: $('toast'),
-
-  // Actions
+  toast:           $('toast'),
   addProductBtn:   $('addProductBtn'),
   printBtn:        $('printBtn'),
 
-  // Print
   printArea:       $('printArea'),
   printBranchLabel:$('printBranchLabel'),
   printTitle:      $('printTitle'),
@@ -237,7 +311,7 @@ const els = {
 };
 
 /* ================================================
-   TOAST NOTIFICATION
+   TOAST
 ================================================ */
 let toastTimer = null;
 
@@ -256,13 +330,6 @@ function showToast(message, type = 'default') {
 function getFilteredProducts() {
   let list = [...state.products];
 
-  // Branch filter
-  if (state.activeBranch !== 'all') {
-    list = list.filter(p => getQty(p, state.activeBranch) > 0 || true); 
-    // Show all but qty shown will be branch-specific — keep all products visible
-  }
-
-  // Search filter
   if (state.searchQuery.trim()) {
     const q = state.searchQuery.toLowerCase();
     list = list.filter(p =>
@@ -272,12 +339,10 @@ function getFilteredProducts() {
     );
   }
 
-  // Category filter
   if (state.categoryFilter !== 'all') {
     list = list.filter(p => p.category === state.categoryFilter);
   }
 
-  // Sort
   switch (state.sortMode) {
     case 'name':
       list.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
@@ -309,7 +374,6 @@ function renderAll() {
   els.emptyState.style.display = 'none';
   els.grid.innerHTML = list.map((p, i) => buildCard(p, i)).join('');
 
-  // Attach click events to cards
   els.grid.querySelectorAll('.product-card').forEach(card => {
     card.addEventListener('click', () => openViewModal(card.dataset.id));
   });
@@ -336,7 +400,6 @@ function buildCard(product, index) {
   const branchesHtml = BRANCH_KEYS.map(k => {
     const bqty   = product.branches[k] ?? 0;
     const bstyle = bqty === 0 ? 'branch-row__qty--out' : bqty <= 3 ? 'branch-row__qty--low' : '';
-    // Only show active branch row highlighted, or show all
     if (state.activeBranch !== 'all' && state.activeBranch !== k) return '';
     return `
       <div class="branch-row">
@@ -363,16 +426,6 @@ function buildCard(product, index) {
     </div>`;
 }
 
-/** Escape HTML for safe rendering */
-function escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 /* ================================================
    VIEW MODAL
 ================================================ */
@@ -388,28 +441,23 @@ function openViewModal(productId) {
   );
   const badge = STOCK_BADGE[status];
 
-  // Image
   if (product.photo) {
-    els.viewImg.src     = product.photo;
+    els.viewImg.src           = product.photo;
     els.viewImg.style.display = 'block';
   } else {
-    els.viewImg.src     = '';
+    els.viewImg.src           = '';
     els.viewImg.style.display = 'none';
   }
 
-  // Badge
-  els.viewBadge.textContent  = badge.label;
-  els.viewBadge.className    = `modal__badge ${badge.cls}`;
-
-  // Info
+  els.viewBadge.textContent    = badge.label;
+  els.viewBadge.className      = `modal__badge ${badge.cls}`;
   els.viewCategory.textContent = CATEGORY_LABELS[product.category] || product.category;
   els.viewTitle.textContent    = product.name;
   els.viewDesc.textContent     = product.description || 'Описание не указано';
   els.viewTotal.textContent    = `${totalQty} ${product.unit}`;
 
-  // Branches
   els.viewBranches.innerHTML = BRANCH_KEYS.map(k => {
-    const q     = product.branches[k] ?? 0;
+    const q      = product.branches[k] ?? 0;
     const qstyle = q === 0 ? 'color:var(--danger)' : q <= 3 ? 'color:var(--warning)' : '';
     return `
       <div class="modal-branch-row">
@@ -445,8 +493,7 @@ function verifyPassword() {
     els.passwordInput.value = '';
     executePendingAction();
   } else {
-    els.passwordError.style.display = 'block';
-    // Re-trigger animation
+    els.passwordError.style.display   = 'block';
     els.passwordError.style.animation = 'none';
     requestAnimationFrame(() => {
       els.passwordError.style.animation = 'shake 0.3s ease';
@@ -461,13 +508,9 @@ function executePendingAction() {
   const { type, data } = state.pendingAction;
   state.pendingAction = null;
 
-  if (type === 'add') {
-    openEditModal(null);
-  } else if (type === 'edit') {
-    openEditModal(data.id);
-  } else if (type === 'delete') {
-    openConfirmModal(data.id);
-  }
+  if (type === 'add')    openEditModal(null);
+  else if (type === 'edit')   openEditModal(data.id);
+  else if (type === 'delete') openConfirmModal(data.id);
 }
 
 /* ================================================
@@ -477,9 +520,8 @@ function openEditModal(productId) {
   state.editingProductId = productId || null;
   els.editModalTitle.textContent = productId ? 'Редактировать товар' : 'Добавить товар';
 
-  // Reset photo
-  state.photoDataUrl = null;
-  els.photoPreview.style.display    = 'none';
+  state.photoDataUrl                 = null;
+  els.photoPreview.style.display     = 'none';
   els.photoPlaceholder.style.display = 'flex';
   els.photoRemoveBtn.style.display   = 'none';
   els.photoInput.value = '';
@@ -494,12 +536,11 @@ function openEditModal(productId) {
     els.qty1.value         = p.branches.branch1 ?? 0;
     els.qty2.value         = p.branches.branch2 ?? 0;
     els.qty3.value         = p.branches.branch3 ?? 0;
-    els.qty4.value         = p.branches.branch4 ?? 0;
 
     if (p.photo) {
-      state.photoDataUrl = p.photo;
-      els.photoPreview.src           = p.photo;
-      els.photoPreview.style.display = 'block';
+      state.photoDataUrl                 = p.photo;
+      els.photoPreview.src               = p.photo;
+      els.photoPreview.style.display     = 'block';
       els.photoPlaceholder.style.display = 'none';
       els.photoRemoveBtn.style.display   = 'block';
     }
@@ -508,14 +549,14 @@ function openEditModal(productId) {
     els.editCategory.value = 'drinks';
     els.editUnit.value     = 'шт';
     els.editDesc.value     = '';
-    els.qty1.value = els.qty2.value = els.qty3.value = els.qty4.value = '0';
+    els.qty1.value = els.qty2.value = els.qty3.value = '0';
   }
 
   openOverlay(els.editModal);
   setTimeout(() => els.editName.focus(), 300);
 }
 
-function saveProduct() {
+async function saveProduct() {
   const name = els.editName.value.trim();
   if (!name) {
     els.editName.style.borderColor = 'var(--danger)';
@@ -536,10 +577,10 @@ function saveProduct() {
       branch1: Math.max(0, parseInt(els.qty1.value) || 0),
       branch2: Math.max(0, parseInt(els.qty2.value) || 0),
       branch3: Math.max(0, parseInt(els.qty3.value) || 0),
-      branch4: Math.max(0, parseInt(els.qty4.value) || 0),
     },
   };
 
+  // Оптимистичное обновление UI до ответа Firebase
   if (state.editingProductId) {
     const idx = state.products.findIndex(p => p.id === state.editingProductId);
     if (idx > -1) state.products[idx] = product;
@@ -549,9 +590,12 @@ function saveProduct() {
     showToast('✓ Товар добавлен', 'success');
   }
 
-  saveData();
-  closeOverlay(els.editModal);
+  saveLocalCache();
   renderAll();
+  closeOverlay(els.editModal);
+
+  // Сохраняем в Firebase
+  await fbSaveProduct(product);
 }
 
 /* ================================================
@@ -565,14 +609,19 @@ function openConfirmModal(productId) {
   openOverlay(els.confirmModal);
 }
 
-function deleteProduct(productId) {
+async function deleteProduct(productId) {
   const idx = state.products.findIndex(p => p.id === productId);
   if (idx > -1) {
     const name = state.products[idx].name;
+
+    // Оптимистичное удаление
     state.products.splice(idx, 1);
-    saveData();
+    saveLocalCache();
     renderAll();
     showToast(`✓ "${name}" удалён`, 'success');
+
+    // Удаляем из Firebase
+    await fbDeleteProduct(productId);
   }
 }
 
@@ -586,7 +635,6 @@ function openOverlay(overlay) {
 
 function closeOverlay(overlay) {
   overlay.classList.remove('active');
-  // Restore scroll only if no other modals open
   const anyOpen = !!document.querySelector('.modal-overlay.active');
   if (!anyOpen) document.body.style.overflow = '';
 }
@@ -603,12 +651,11 @@ function initPhotoUpload() {
   els.photoInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = ev => {
-      state.photoDataUrl = ev.target.result;
-      els.photoPreview.src            = ev.target.result;
-      els.photoPreview.style.display  = 'block';
+      state.photoDataUrl                 = ev.target.result;
+      els.photoPreview.src               = ev.target.result;
+      els.photoPreview.style.display     = 'block';
       els.photoPlaceholder.style.display = 'none';
       els.photoRemoveBtn.style.display   = 'block';
     };
@@ -617,9 +664,9 @@ function initPhotoUpload() {
 
   els.photoRemoveBtn.addEventListener('click', e => {
     e.stopPropagation();
-    state.photoDataUrl = null;
-    els.photoPreview.src            = '';
-    els.photoPreview.style.display  = 'none';
+    state.photoDataUrl                 = null;
+    els.photoPreview.src               = '';
+    els.photoPreview.style.display     = 'none';
     els.photoPlaceholder.style.display = 'flex';
     els.photoRemoveBtn.style.display   = 'none';
     els.photoInput.value = '';
@@ -636,7 +683,7 @@ function initSteppers() {
       const input    = $(targetId);
       if (!input) return;
       let val = parseInt(input.value) || 0;
-      if (btn.dataset.action === 'plus') val++;
+      if (btn.dataset.action === 'plus')  val++;
       if (btn.dataset.action === 'minus') val = Math.max(0, val - 1);
       input.value = val;
     });
@@ -655,7 +702,7 @@ function preparePrint() {
   });
 
   const isAllBranches = state.activeBranch === 'all';
-  const branchLabel = isAllBranches
+  const branchLabel   = isAllBranches
     ? 'Все филиалы'
     : BRANCH_LABELS[state.activeBranch];
 
@@ -664,10 +711,8 @@ function preparePrint() {
   els.printDate.textContent        = dateStr;
   els.printFooterDate.textContent  = dateStr;
 
-  // Динамически обновляем заголовки таблицы
   const thead = document.getElementById('printTableHead');
   if (isAllBranches) {
-    // Показываем все филиалы
     thead.innerHTML = `
       <th style="width:60px">Фото</th>
       <th>Товар</th>
@@ -675,7 +720,6 @@ function preparePrint() {
       ${BRANCH_KEYS.map(k => `<th style="text-align:center">${BRANCH_LABELS[k]}</th>`).join('')}
       <th>Итого</th>`;
   } else {
-    // Показываем только выбранный филиал
     thead.innerHTML = `
       <th style="width:60px">Фото</th>
       <th>Товар</th>
@@ -690,17 +734,15 @@ function preparePrint() {
 
     let dataCells = '';
     if (isAllBranches) {
-      // Все колонки по филиалам + итого
       const branchCells = BRANCH_KEYS.map(k => {
         const q = p.branches[k] ?? 0;
-        return `<td style="text-align:center;${q===0?'color:#ccc;':''}">${q}</td>`;
+        return `<td style="text-align:center;${q === 0 ? 'color:#ccc;' : ''}">${q}</td>`;
       }).join('');
       const total = getQty(p);
       dataCells = `${branchCells}<td class="print-td-total">${total} ${escHtml(p.unit)}</td>`;
     } else {
-      // Только остаток выбранного филиала
       const q = p.branches[state.activeBranch] ?? 0;
-      dataCells = `<td class="print-td-total" style="text-align:center;${q===0?'color:#ccc;':''}">${q} ${escHtml(p.unit)}</td>`;
+      dataCells = `<td class="print-td-total" style="text-align:center;${q === 0 ? 'color:#ccc;' : ''}">${q} ${escHtml(p.unit)}</td>`;
     }
 
     return `
@@ -715,7 +757,6 @@ function preparePrint() {
       </tr>`;
   }).join('');
 
-  // Show print area briefly, then print
   els.printArea.style.display = 'block';
   setTimeout(() => {
     window.print();
@@ -765,28 +806,19 @@ function initFilters() {
    EVENT LISTENERS
 ================================================ */
 function initEventListeners() {
-  // Add product button
-  els.addProductBtn.addEventListener('click', () => {
-    requestPassword({ type: 'add' });
-  });
-
-  // Print button
-  els.printBtn.addEventListener('click', () => {
-    preparePrint();
-  });
+  els.addProductBtn.addEventListener('click', () => requestPassword({ type: 'add' }));
+  els.printBtn.addEventListener('click', preparePrint);
 
   // VIEW MODAL
   els.viewModalClose.addEventListener('click', closeViewModal);
   els.viewModal.addEventListener('click', e => {
     if (e.target === els.viewModal) closeViewModal();
   });
-
   els.viewEditBtn.addEventListener('click', () => {
     const id = state.currentViewId;
     closeViewModal();
     requestPassword({ type: 'edit', data: { id } });
   });
-
   els.viewDeleteBtn.addEventListener('click', () => {
     const id = state.currentViewId;
     closeViewModal();
@@ -816,8 +848,6 @@ function initEventListeners() {
   els.passwordInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') verifyPassword();
   });
-
-  // Password toggle
   els.passwordToggle.addEventListener('click', () => {
     const input = els.passwordInput;
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -842,7 +872,7 @@ function initEventListeners() {
     state.pendingAction = null;
   });
 
-  // Escape key closes top modal
+  // ESC
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     const openModals = document.querySelectorAll('.modal-overlay.active');
@@ -859,16 +889,14 @@ function initEventListeners() {
    INIT
 ================================================ */
 function init() {
-  loadData();
   initBranchNav();
   initFilters();
   initPhotoUpload();
   initSteppers();
   initEventListeners();
-  renderAll();
+  initFirebaseListener(); // Firebase сам вызовет renderAll() при получении данных
 }
 
-// Run on DOM ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
