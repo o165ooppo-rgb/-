@@ -25,10 +25,10 @@ const BRANCH_LABELS = {
   branch1: 'Филиал 1',
   branch2: 'Филиал 2',
   branch3: 'Филиал 3',
-  branch4: 'Филиал 4',
+  
 };
 
-const BRANCH_KEYS = ['branch1', 'branch2', 'branch3', 'branch4'];
+const BRANCH_KEYS = ['branch1', 'branch2', 'branch3',];
 
 /* ================================================
    STATE
@@ -654,7 +654,8 @@ function preparePrint() {
     hour: '2-digit', minute: '2-digit',
   });
 
-  const branchLabel = state.activeBranch === 'all'
+  const isAllBranches = state.activeBranch === 'all';
+  const branchLabel = isAllBranches
     ? 'Все филиалы'
     : BRANCH_LABELS[state.activeBranch];
 
@@ -663,19 +664,44 @@ function preparePrint() {
   els.printDate.textContent        = dateStr;
   els.printFooterDate.textContent  = dateStr;
 
-  const isAllBranches = state.activeBranch === 'all';
+  // Динамически обновляем заголовки таблицы
+  const thead = document.getElementById('printTableHead');
+  if (isAllBranches) {
+    // Показываем все филиалы
+    thead.innerHTML = `
+      <th style="width:60px">Фото</th>
+      <th>Товар</th>
+      <th>Категория</th>
+      ${BRANCH_KEYS.map(k => `<th style="text-align:center">${BRANCH_LABELS[k]}</th>`).join('')}
+      <th>Итого</th>`;
+  } else {
+    // Показываем только выбранный филиал
+    thead.innerHTML = `
+      <th style="width:60px">Фото</th>
+      <th>Товар</th>
+      <th>Категория</th>
+      <th style="text-align:center">Количество</th>`;
+  }
 
   els.printTableBody.innerHTML = list.map(p => {
     const imgHtml = p.photo
       ? `<img src="${p.photo}" alt="${escHtml(p.name)}" />`
       : `<div class="print-img-placeholder">—</div>`;
 
-    const branchCells = BRANCH_KEYS.map(k => {
-      const q = p.branches[k] ?? 0;
-      return `<td style="text-align:center;${q===0?'color:#ccc;':''}">${q}</td>`;
-    }).join('');
-
-    const total = getQty(p);
+    let dataCells = '';
+    if (isAllBranches) {
+      // Все колонки по филиалам + итого
+      const branchCells = BRANCH_KEYS.map(k => {
+        const q = p.branches[k] ?? 0;
+        return `<td style="text-align:center;${q===0?'color:#ccc;':''}">${q}</td>`;
+      }).join('');
+      const total = getQty(p);
+      dataCells = `${branchCells}<td class="print-td-total">${total} ${escHtml(p.unit)}</td>`;
+    } else {
+      // Только остаток выбранного филиала
+      const q = p.branches[state.activeBranch] ?? 0;
+      dataCells = `<td class="print-td-total" style="text-align:center;${q===0?'color:#ccc;':''}">${q} ${escHtml(p.unit)}</td>`;
+    }
 
     return `
       <tr>
@@ -685,8 +711,7 @@ function preparePrint() {
           <div style="font-size:11px;color:#888;margin-top:2px">${escHtml(p.description || '')}</div>
         </td>
         <td>${escHtml(CATEGORY_LABELS[p.category] || p.category)}</td>
-        ${branchCells}
-        <td class="print-td-total">${total} ${escHtml(p.unit)}</td>
+        ${dataCells}
       </tr>`;
   }).join('');
 
