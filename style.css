@@ -1064,3 +1064,32 @@ button, input, select, textarea { font-family: var(--font); font-size: inherit; 
   .branch-btn     { padding: 5px 11px; font-size: 12.5px; }
   .products-grid  { grid-template-columns: 1fr 1fr; gap: 9px; }
 }
+/* ===================== SYNC INDICATOR (Firebase) ===================== */
+.sync-indicator {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--t-normal), color var(--t-normal);
+}
+
+.sync--connecting {
+  background: var(--warning-light);
+  color: #a06800;
+}
+
+.sync--ok {
+  background: var(--success-light);
+  color: #1a7a12;
+}
+
+.sync--error {
+  background: var(--danger-light);
+  color: #b01a1a;
+}
+
+@media (max-width: 768px) {
+  .sync-indicator { display: none; }
+}
