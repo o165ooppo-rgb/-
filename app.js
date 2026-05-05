@@ -276,15 +276,18 @@ async function fbClearLogs() {
 ================================================ */
 function showSyncIndicator(status) {
   const el = document.getElementById('syncIndicator');
-  if (!el) return;
-  const map = {
-    connecting: { text: '⏳ Подключение...',  cls: 'sync--connecting' },
-    ok:         { text: '☁ Синхронизировано', cls: 'sync--ok'         },
-    error:      { text: '⚠ Офлайн',           cls: 'sync--error'      },
-  };
-  const s = map[status] || map.ok;
-  el.textContent = s.text;
-  el.className   = `sync-indicator ${s.cls}`;
+  if (el) {
+    const map = {
+      connecting: { text: '⏳ Подключение...',  cls: 'sync--connecting' },
+      ok:         { text: '☁ Синхронизировано', cls: 'sync--ok'         },
+      error:      { text: '⚠ Офлайн',           cls: 'sync--error'      },
+    };
+    const s = map[status] || map.ok;
+    el.textContent = s.text;
+    el.className   = `sync-indicator ${s.cls}`;
+  }
+  // Обновляем drawer sync (если он есть)
+  if (typeof updateDrawerSync === 'function') updateDrawerSync(status);
 }
 
 /* ================================================
@@ -488,6 +491,7 @@ function hideAuth() {
   initProductEventListeners();
   initManagerPanel();
   initUserChip();
+  initMobileUI();
 }
 
 function updateUserChip() {
@@ -515,20 +519,215 @@ function initUserChip() {
 
   document.addEventListener('click', () => chip.classList.remove('open'));
 
-  $('logoutBtn').addEventListener('click', async () => {
+  $('logoutBtn').addEventListener('click', () => {
     chip.classList.remove('open');
-    await writeLog('logout', 'Выход из системы');
-    clearSession();
-    state.currentUser = null;
-    // Скрываем интерфейс
-    ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
-      const el = $(id);
-      if (el) el.style.display = 'none';
-    });
-    $('authOverlay').style.display = 'flex';
-    showAuthScreen('authChoose');
-    showToast('👋 Вы вышли из системы');
+    handleLogout();
   });
+}
+
+async function handleLogout() {
+  await writeLog('logout', 'Выход из системы');
+  clearSession();
+  state.currentUser = null;
+  // Скрываем интерфейс
+  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+    const el = $(id);
+    if (el) el.style.display = 'none';
+  });
+  // Закрываем drawer если открыт
+  const drawer = $('drawerOverlay');
+  if (drawer) drawer.classList.remove('active');
+  $('authOverlay').style.display = 'flex';
+  showAuthScreen('authChoose');
+  showToast('👋 Вы вышли из системы');
+}
+
+/* ================================================
+   MOBILE UI (Drawer + Branch Modal)
+================================================ */
+function initMobileUI() {
+  initDrawer();
+  initBranchModal();
+  updateBranchIndicator();
+  updateDrawerProfile();
+  updateDrawerSync('connecting');
+}
+
+function initDrawer() {
+  const burgerBtn      = $('burgerBtn');
+  const drawerOverlay  = $('drawerOverlay');
+  const drawerCloseBtn = $('drawerCloseBtn');
+  if (!burgerBtn || !drawerOverlay) return;
+
+  const openDrawer = () => {
+    updateDrawerProfile();
+    drawerOverlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+  const closeDrawer = () => {
+    drawerOverlay.classList.remove('active');
+    document.body.style.overflow = '';
+  };
+
+  burgerBtn.addEventListener('click', openDrawer);
+  drawerCloseBtn.addEventListener('click', closeDrawer);
+  drawerOverlay.addEventListener('click', e => {
+    if (e.target === drawerOverlay) closeDrawer();
+  });
+
+  // Кнопка "Филиал" в drawer — открывает модалку выбора
+  $('drawerBranchBtn').addEventListener('click', () => {
+    closeDrawer();
+    setTimeout(() => openBranchModal(), 220);
+  });
+
+  // Кнопка "Добавить товар" в drawer
+  $('drawerAddBtn').addEventListener('click', () => {
+    closeDrawer();
+    setTimeout(() => openEditModal(null), 220);
+  });
+
+  // Кнопка "Печать" в drawer
+  $('drawerPrintBtn').addEventListener('click', () => {
+    closeDrawer();
+    setTimeout(() => preparePrint(), 220);
+  });
+
+  // Кнопка "Менеджер" в drawer (только для менеджеров)
+  $('drawerManagerBtn').addEventListener('click', () => {
+    closeDrawer();
+    setTimeout(() => {
+      const managerOverlay = $('managerOverlay');
+      if (!managerOverlay) return;
+      managerOverlay.style.display = 'flex';
+      requestAnimationFrame(() => managerOverlay.classList.add('active'));
+      renderManagerUsers();
+      renderManagerLogs();
+    }, 220);
+  });
+  // Показываем кнопку менеджера если пользователь — менеджер
+  if (state.currentUser && state.currentUser.role !== 'staff') {
+    $('drawerManagerBtn').style.display = 'flex';
+  }
+
+  // Выход
+  $('drawerLogoutBtn').addEventListener('click', () => {
+    closeDrawer();
+    setTimeout(() => handleLogout(), 220);
+  });
+
+  // Индикатор филиала под шапкой — открывает модалку выбора
+  const branchIndicator = $('branchIndicator');
+  if (branchIndicator) {
+    branchIndicator.addEventListener('click', openBranchModal);
+  }
+
+  // Закрытие drawer по ESC
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && drawerOverlay.classList.contains('active')) closeDrawer();
+  });
+}
+
+function updateDrawerProfile() {
+  if (!state.currentUser) return;
+  const u = state.currentUser;
+  const initial = (u.name || u.username || '?')[0].toUpperCase();
+  const av = $('drawerAvatar');
+  const nm = $('drawerName');
+  const rl = $('drawerRole');
+  if (av) av.textContent = initial;
+  if (nm) nm.textContent = u.name || u.username;
+  if (rl) rl.textContent = ROLE_LABELS[u.role] || u.role;
+}
+
+function updateDrawerSync(status) {
+  const dot = $('drawerSyncDot');
+  const txt = $('drawerSyncText');
+  if (!dot || !txt) return;
+  const map = {
+    connecting: { text: 'Подключение...',  cls: 'connecting' },
+    ok:         { text: 'Синхронизировано', cls: '' },
+    error:      { text: 'Офлайн режим',     cls: 'error' },
+  };
+  const s = map[status] || map.ok;
+  dot.className = 'drawer-sync__dot ' + s.cls;
+  txt.textContent = s.text;
+}
+
+function initBranchModal() {
+  const modal      = $('branchModal');
+  const closeBtn   = $('branchModalClose');
+  if (!modal) return;
+
+  closeBtn.addEventListener('click', () => closeOverlay(modal));
+  modal.addEventListener('click', e => {
+    if (e.target === modal) closeOverlay(modal);
+  });
+
+  // Клик по любому филиалу в модалке
+  modal.querySelectorAll('.branch-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const branch = opt.dataset.branch;
+      // Снимаем active со всех
+      modal.querySelectorAll('.branch-option').forEach(o => o.classList.remove('active'));
+      opt.classList.add('active');
+      // Применяем
+      state.activeBranch = branch;
+      // Синхронизируем десктопные кнопки филиалов
+      document.querySelectorAll('.branches .branch-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.branch === branch);
+      });
+      updateBranchIndicator();
+      renderAll();
+      // Закрываем с небольшой задержкой для красивой анимации
+      setTimeout(() => closeOverlay(modal), 180);
+    });
+  });
+}
+
+function openBranchModal() {
+  const modal = $('branchModal');
+  if (!modal) return;
+  // Подсвечиваем активный филиал
+  modal.querySelectorAll('.branch-option').forEach(o => {
+    o.classList.toggle('active', o.dataset.branch === state.activeBranch);
+  });
+  // Обновляем статистику по каждому филиалу
+  updateBranchModalStats();
+  openOverlay(modal);
+}
+
+function updateBranchModalStats() {
+  const totalAll = state.products.length;
+  const elAll = $('branchStatAll');
+  if (elAll) {
+    const allItems = state.products.reduce((s, p) => s + getQty(p), 0);
+    elAll.textContent = `${totalAll} наименований • ${allItems} ед.`;
+  }
+  BRANCH_KEYS.forEach((k, i) => {
+    const el = $(`branchStat${i + 1}`);
+    if (!el) return;
+    const items = state.products.reduce((s, p) => s + (p.branches[k] ?? 0), 0);
+    const lowCount = state.products.filter(p => {
+      const q = p.branches[k] ?? 0;
+      return q > 0 && q <= 5;
+    }).length;
+    const outCount = state.products.filter(p => (p.branches[k] ?? 0) === 0).length;
+    let extra = '';
+    if (outCount > 0) extra = ` • ⚠ ${outCount} нет`;
+    else if (lowCount > 0) extra = ` • ⚠ ${lowCount} мало`;
+    el.textContent = `${items} ед.${extra}`;
+  });
+}
+
+function updateBranchIndicator() {
+  const indicator = $('branchIndicatorValue');
+  if (!indicator) return;
+  const label = state.activeBranch === 'all' ? 'Все филиалы' : (BRANCH_LABELS[state.activeBranch] || state.activeBranch);
+  indicator.textContent = label;
+
+  const drawerSub = $('drawerBranchSub');
+  if (drawerSub) drawerSub.textContent = label;
 }
 
 /* ================================================
@@ -862,6 +1061,7 @@ function updateStockCounts() {
 ================================================ */
 function renderAll() {
   updateStockCounts();
+  if (typeof updateBranchModalStats === 'function') updateBranchModalStats();
   const list = getFilteredProducts();
   $('statsText').textContent = `Товаров: ${list.length}`;
 
@@ -1225,6 +1425,7 @@ function initBranchNav() {
       branches.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.activeBranch = btn.dataset.branch;
+      updateBranchIndicator();
       renderAll();
     });
   });
