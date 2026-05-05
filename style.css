@@ -660,7 +660,6 @@ input, select, textarea {
   position: sticky;
   top: 0;
   z-index: 200;
-  height: var(--header-h);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow-xs);
@@ -670,10 +669,335 @@ input, select, textarea {
   max-width: 1320px;
   margin: 0 auto;
   padding: 0 20px;
-  height: 100%;
+  height: var(--header-h);
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+/* Бургер-меню — только на мобильных */
+.btn-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-burger svg { width: 22px; height: 22px; }
+.btn-burger:active { background: var(--bg); }
+
+/* Индикатор филиала под шапкой — только на мобильных */
+.branch-indicator {
+  display: none;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  background: var(--accent-subtle);
+  border: none;
+  border-top: 1px solid var(--border-light);
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--t-fast);
+}
+.branch-indicator:active { background: #d8e8fc; }
+.branch-indicator__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.branch-indicator__value {
+  font-weight: 700;
+  flex: 1;
+}
+.branch-indicator__chevron { opacity: 0.6; }
+
+/* ===================== MOBILE DRAWER ===================== */
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0);
+  z-index: 600;
+  pointer-events: none;
+  transition: background var(--t-normal);
+}
+.drawer-overlay.active {
+  background: rgba(0,0,0,0.5);
+  pointer-events: all;
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 84%;
+  max-width: 320px;
+  background: var(--surface);
+  box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+  transform: translateX(-100%);
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.drawer-overlay.active .drawer { transform: translateX(0); }
+
+.drawer-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 16px 16px;
+  background: linear-gradient(135deg, var(--accent) 0%, #0d5ecf 100%);
+  color: #fff;
+  position: relative;
+}
+.drawer-profile__avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  border: 2px solid rgba(255,255,255,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+.drawer-profile__info { flex: 1; min-width: 0; }
+.drawer-profile__name {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-profile__role {
+  font-size: 12px;
+  opacity: 0.85;
+  font-weight: 500;
+}
+.drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.drawer-close svg { width: 16px; height: 16px; }
+.drawer-close:active { background: rgba(255,255,255,0.35); }
+
+.drawer-sync {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface2);
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-light);
+}
+.drawer-sync__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  flex-shrink: 0;
+}
+.drawer-sync__dot.connecting { background: var(--warning); animation: pulseDot 1.2s infinite; }
+.drawer-sync__dot.error { background: var(--danger); }
+
+.drawer-section {
+  padding: 12px 8px 8px;
+}
+.drawer-section__title {
+  padding: 4px 12px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.drawer-item:active { background: var(--surface2); }
+
+.drawer-item__icon {
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.drawer-item__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.drawer-item__label {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.drawer-item__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.drawer-item__arrow {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.drawer-footer {
+  margin-top: auto;
+  padding: 8px 8px 16px;
+  border-top: 1px solid var(--border-light);
+}
+.drawer-item--danger { color: var(--danger); }
+.drawer-item--danger:active { background: var(--danger-light); }
+
+/* ===================== BRANCH MODAL ===================== */
+.modal--branch {
+  max-width: 440px;
+  padding: 22px 18px 18px;
+}
+.branch-modal__title {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+.branch-modal__sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+.branch-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.branch-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border: 2px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition: all var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.branch-option:hover { border-color: #c4c6cc; background: var(--surface2); }
+.branch-option:active { transform: scale(0.98); }
+.branch-option.active {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.branch-option__icon {
+  font-size: 24px;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.branch-option.active .branch-option__icon {
+  background: rgba(24, 119, 242, 0.15);
+}
+
+.branch-option__content {
+  flex: 1;
+  min-width: 0;
+}
+.branch-option__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.branch-option__desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.branch-option__check {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: transparent;
+  transition: all var(--t-fast);
+}
+.branch-option__check svg { width: 14px; height: 14px; }
+.branch-option.active .branch-option__check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .header__brand {
@@ -1656,33 +1980,60 @@ input, select, textarea {
 /* ---------- MD: планшеты вертикально / большие телефоны (≤767px) ---------- */
 @media (max-width: 767px) {
   :root {
-    --header-h: 54px;
+    --header-h: 52px;
   }
 
-  /* Header: компактный */
-  .header__inner { padding: 0 14px; gap: 8px; height: var(--header-h); }
-  .header__logo-icon { width: 30px; height: 30px; }
+  /* МОБИЛЬНАЯ ШАПКА: бургер | логотип-центр | плюс */
+  .header { box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+  .header__inner {
+    padding: 0 8px;
+    gap: 4px;
+    height: var(--header-h);
+    justify-content: space-between;
+  }
 
-  /* Кнопки в шапке: только иконки */
-  .btn-add span, .btn-icon span { display: none; }
-  .btn-add  { padding: 8px 11px; }
-  .btn-icon { padding: 8px 10px; }
-  .user-chip__name { display: none; }
-  .user-chip { padding: 4px; }
-  .user-chip__avatar { width: 30px; height: 30px; font-size: 13px; }
+  /* Показываем бургер */
+  .btn-burger { display: flex; }
 
-  /* Sync индикатор скрываем на мобильных */
-  .sync-indicator { display: none; }
-
-  /* Филиалы — горизонтальный скролл */
-  .branches {
+  /* Бренд — по центру */
+  .header__brand {
     flex: 1;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    justify-content: center;
+    gap: 8px;
   }
-  .branches::-webkit-scrollbar { display: none; }
-  .branch-btn { flex-shrink: 0; padding: 6px 12px; font-size: 12.5px; }
+  .header__logo-icon { width: 28px; height: 28px; }
+  .header__title {
+    display: block;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  /* Скрываем десктопные элементы */
+  .branches { display: none; }
+  .sync-indicator { display: none; }
+  .btn-manager { display: none !important; }
+  .btn-icon { display: none; }
+  .user-chip { display: none; }
+
+  /* В шапке справа остаётся только кнопка-плюс */
+  .header__actions {
+    gap: 0;
+    flex-shrink: 0;
+  }
+  .btn-add {
+    padding: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-add svg { width: 18px; height: 18px; }
+  .btn-add span { display: none; }
+
+  /* Показываем индикатор филиала */
+  .branch-indicator { display: flex; }
 
   /* Toolbar */
   .toolbar { height: auto; }
@@ -1690,7 +2041,7 @@ input, select, textarea {
   .toolbar__row    { flex-wrap: wrap; gap: 8px; }
   .search-wrap     { max-width: 100%; width: 100%; order: -1; flex: 1 1 100%; }
   .filter-group    { gap: 6px; flex: 1; }
-  .filter-select   { font-size: 12.5px; flex: 1; }
+  .filter-select   { font-size: 12.5px; flex: 1; min-width: 0; }
   .stats-bar       { display: none; }
 
   /* Быстрые фильтры — горизонтальный скролл */
@@ -1706,7 +2057,7 @@ input, select, textarea {
     padding-right: 14px;
   }
   .quick-filters::-webkit-scrollbar { display: none; }
-  .quick-chip { font-size: 12px; padding: 6px 11px; flex-shrink: 0; }
+  .quick-chip { font-size: 12px; padding: 6px 11px; flex-shrink: 0; min-height: 30px; }
   .quick-chip__count { font-size: 10px; min-width: 18px; height: 16px; }
 
   /* Сетка товаров */
@@ -1727,22 +2078,12 @@ input, select, textarea {
   /* Менеджерская панель — слайд снизу */
   .manager-panel  { width: 100%; max-width: 100%; }
 
-  /* Touch-friendly: все интерактивные элементы минимум 40px */
+  /* Touch-friendly */
   .qty-btn        { width: 38px; height: 38px; }
-  .branch-btn     { min-height: 32px; }
-  .quick-chip     { min-height: 30px; }
 }
 
 /* ---------- SM: средние телефоны (≤575px) ---------- */
 @media (max-width: 575px) {
-  .header__inner { padding: 0 12px; gap: 6px; }
-  .header__brand { gap: 8px; }
-
-  /* Уменьшаем индикаторы */
-  .btn-manager { padding: 6px 8px; }
-  .btn-add { padding: 8px 10px; }
-  .btn-icon { padding: 7px 9px; }
-
   /* Сетка: всегда 2 колонки */
   .main { padding: 12px 12px 40px; }
   .products-grid {
@@ -1770,6 +2111,9 @@ input, select, textarea {
   .modal { max-width: 100%; border-radius: var(--radius); }
   .modal--view { border-radius: var(--radius); }
 
+  .modal--branch { padding: 18px 14px 16px; }
+  .branch-modal__title { font-size: 17px; }
+
   /* Toast снизу */
   .toast {
     left: 12px;
@@ -1786,16 +2130,15 @@ input, select, textarea {
 @media (max-width: 380px) {
   body { font-size: 14px; }
 
-  .header__inner { padding: 0 10px; gap: 5px; }
-  .header__logo-icon { width: 28px; height: 28px; }
+  .header__inner { padding: 0 6px; gap: 2px; }
+  .header__logo-icon { width: 26px; height: 26px; }
+  .header__title { font-size: 14px; }
+  .btn-burger { width: 36px; height: 36px; }
+  .btn-burger svg { width: 20px; height: 20px; }
+  .btn-add { width: 36px; height: 36px; }
+  .btn-add svg { width: 16px; height: 16px; }
 
-  .branch-btn { padding: 5px 9px; font-size: 12px; }
-
-  .btn-add  { padding: 7px 9px; }
-  .btn-add svg { width: 13px; height: 13px; }
-  .btn-icon { padding: 6px 8px; }
-  .btn-icon svg { width: 13px; height: 13px; }
-  .user-chip__avatar { width: 28px; height: 28px; font-size: 12px; }
+  .branch-indicator { padding: 8px 12px; font-size: 13px; }
 
   .toolbar__inner { padding: 8px 10px; gap: 6px; }
   .search-input { font-size: 13px; padding: 7px 10px 7px 30px; }
@@ -1828,6 +2171,20 @@ input, select, textarea {
   /* Менеджер */
   .manager-tabs { padding: 0 10px; }
   .manager-tab { font-size: 12px; padding: 9px 10px; }
+
+  /* Drawer */
+  .drawer { width: 88%; }
+  .drawer-profile { padding: 16px 14px 14px; }
+  .drawer-profile__avatar { width: 42px; height: 42px; font-size: 17px; }
+  .drawer-item { padding: 11px; }
+  .drawer-item__icon { font-size: 18px; width: 28px; height: 28px; }
+  .drawer-item__label { font-size: 14px; }
+
+  /* Branch option */
+  .branch-option { padding: 12px; gap: 10px; }
+  .branch-option__icon { font-size: 22px; width: 38px; height: 38px; }
+  .branch-option__name { font-size: 14px; }
+  .branch-option__desc { font-size: 12px; }
 }
 
 /* ---------- ОЧЕНЬ маленькие экраны (≤340px) — резервный вариант ---------- */
