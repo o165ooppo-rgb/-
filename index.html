@@ -3,20 +3,157 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Склад — Управление остатками</title>
+  <title>Склад Mone — Управление остатками</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
 
+  <!-- ===== AUTH MODAL ===== -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-box" id="authBox">
+      <div class="auth-logo">
+        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="36" height="36" rx="10" fill="#1877F2"/>
+          <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <span>Склад Mone</span>
+      </div>
+
+      <!-- Экран выбора -->
+      <div class="auth-screen" id="authChoose">
+        <h2 class="auth-title">Добро пожаловать</h2>
+        <p class="auth-sub">Войдите в свой аккаунт или создайте новый</p>
+        <button class="auth-btn auth-btn--primary" id="goLoginBtn">Войти</button>
+        <button class="auth-btn auth-btn--outline" id="goRegisterBtn">Создать аккаунт</button>
+      </div>
+
+      <!-- Экран входа -->
+      <div class="auth-screen" id="authLogin" style="display:none">
+        <h2 class="auth-title">Вход</h2>
+        <p class="auth-sub">Введите логин и пароль</p>
+        <div class="auth-field">
+          <label>Логин</label>
+          <input type="text" id="loginUsername" placeholder="Ваш логин" autocomplete="username"/>
+        </div>
+        <div class="auth-field">
+          <label>Пароль</label>
+          <div class="auth-input-wrap">
+            <input type="password" id="loginPassword" placeholder="Пароль" autocomplete="current-password"/>
+            <button class="auth-eye" id="loginEye" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="auth-error" id="loginError"></div>
+        <button class="auth-btn auth-btn--primary" id="loginSubmitBtn">Войти</button>
+        <button class="auth-link" id="backFromLogin">← Назад</button>
+      </div>
+
+      <!-- Экран регистрации -->
+      <div class="auth-screen" id="authRegister" style="display:none">
+        <h2 class="auth-title">Создать аккаунт</h2>
+        <p class="auth-sub">Заполните данные для регистрации</p>
+        <div class="auth-field">
+          <label>Имя</label>
+          <input type="text" id="regName" placeholder="Ваше имя" autocomplete="name"/>
+        </div>
+        <div class="auth-field">
+          <label>Логин</label>
+          <input type="text" id="regUsername" placeholder="Придумайте логин" autocomplete="username"/>
+        </div>
+        <div class="auth-field">
+          <label>Пароль</label>
+          <div class="auth-input-wrap">
+            <input type="password" id="regPassword" placeholder="Придумайте пароль" autocomplete="new-password"/>
+            <button class="auth-eye" id="regEye" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="auth-error" id="regError"></div>
+        <button class="auth-btn auth-btn--primary" id="regSubmitBtn">Создать аккаунт</button>
+        <button class="auth-link" id="backFromRegister">← Назад</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MANAGER PANEL ===== -->
+  <div class="manager-overlay" id="managerOverlay" style="display:none">
+    <div class="manager-panel">
+      <div class="manager-panel__header">
+        <div class="manager-panel__title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Менеджер
+        </div>
+        <button class="manager-panel__close" id="managerCloseBtn">✕</button>
+      </div>
+
+      <!-- Вкладки -->
+      <div class="manager-tabs">
+        <button class="manager-tab active" data-tab="users">👥 Пользователи</button>
+        <button class="manager-tab" data-tab="logs">📋 Журнал</button>
+      </div>
+
+      <!-- Вкладка пользователей -->
+      <div class="manager-tab-content" id="tabUsers">
+        <div class="manager-users-header">
+          <span class="manager-section-label">Все аккаунты</span>
+          <button class="manager-add-user-btn" id="managerAddUserBtn">+ Добавить</button>
+        </div>
+        <div class="manager-users-list" id="managerUsersList"></div>
+      </div>
+
+      <!-- Вкладка журнала -->
+      <div class="manager-tab-content" id="tabLogs" style="display:none">
+        <div class="manager-users-header">
+          <span class="manager-section-label">История действий</span>
+          <button class="manager-clear-logs-btn" id="clearLogsBtn">Очистить</button>
+        </div>
+        <div class="manager-logs-list" id="managerLogsList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MANAGER ADD USER MODAL ===== -->
+  <div class="modal-overlay" id="managerAddModal">
+    <div class="modal modal--password">
+      <button class="modal__close" id="managerAddModalClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <h2 style="margin-bottom:18px;font-size:17px;font-weight:800;">Добавить пользователя</h2>
+      <div class="auth-field" style="text-align:left">
+        <label>Имя</label>
+        <input type="text" id="maName" placeholder="Имя" class="auth-standalone-input"/>
+      </div>
+      <div class="auth-field" style="text-align:left;margin-top:10px">
+        <label>Логин</label>
+        <input type="text" id="maUsername" placeholder="Логин" class="auth-standalone-input"/>
+      </div>
+      <div class="auth-field" style="text-align:left;margin-top:10px">
+        <label>Пароль</label>
+        <input type="password" id="maPassword" placeholder="Пароль" class="auth-standalone-input"/>
+      </div>
+      <div class="auth-field" style="text-align:left;margin-top:10px">
+        <label>Роль</label>
+        <select id="maRole" class="auth-standalone-input">
+          <option value="staff">Сотрудник</option>
+          <option value="manager">Менеджер</option>
+        </select>
+      </div>
+      <div class="auth-error" id="maError" style="margin-top:8px"></div>
+      <button class="btn-save btn-save--full" id="maSubmitBtn" style="margin-top:14px">Создать</button>
+    </div>
+  </div>
+
   <!-- ===== HEADER ===== -->
-  <header class="header">
+  <header class="header" id="mainHeader" style="display:none">
     <div class="header__inner">
       <div class="header__brand">
         <svg class="header__logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="36" height="36" rx="10" fill="#FF6B35"/>
+          <rect width="36" height="36" rx="10" fill="#1877F2"/>
           <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
         <span class="header__title">Склад Mone</span>
@@ -30,8 +167,30 @@
       </nav>
 
       <div class="header__actions">
-        <!-- Индикатор синхронизации Firebase -->
         <span class="sync-indicator sync--connecting" id="syncIndicator">⏳ Подключение...</span>
+
+        <!-- Кнопка менеджера (видна только менеджерам) -->
+        <button class="btn-manager" id="managerPanelBtn" style="display:none" title="Панель менеджера">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Менеджер</span>
+        </button>
+
+        <!-- Юзер аватар -->
+        <div class="user-chip" id="userChip">
+          <div class="user-chip__avatar" id="userAvatar">?</div>
+          <span class="user-chip__name" id="userChipName"></span>
+          <div class="user-dropdown" id="userDropdown">
+            <div class="user-dropdown__info">
+              <strong id="dropdownName"></strong>
+              <span id="dropdownRole"></span>
+            </div>
+            <div class="user-dropdown__divider"></div>
+            <button class="user-dropdown__item" id="logoutBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Выйти
+            </button>
+          </div>
+        </div>
 
         <button class="btn-icon" id="printBtn" title="Печать отчёта">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -41,6 +200,7 @@
           </svg>
           <span>Печать</span>
         </button>
+
         <button class="btn-add" id="addProductBtn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -52,40 +212,64 @@
   </header>
 
   <!-- ===== SEARCH + FILTER BAR ===== -->
-  <div class="toolbar">
+  <div class="toolbar" id="mainToolbar" style="display:none">
     <div class="toolbar__inner">
-      <div class="search-wrap">
-        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input type="text" id="searchInput" class="search-input" placeholder="Поиск по товарам..." />
+      <div class="toolbar__row">
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="searchInput" class="search-input" placeholder="Поиск: например '5 шт', 'мало', 'pepsi'..." />
+        </div>
+        <div class="filter-group">
+          <select id="categoryFilter" class="filter-select">
+            <option value="all">Все категории</option>
+            <option value="drinks">Напитки</option>
+            <option value="disposable">Одноразовая посуда</option>
+            <option value="food">Продукты</option>
+            <option value="cleaning">Чистящие средства</option>
+            <option value="other">Прочее</option>
+          </select>
+          <select id="sortFilter" class="filter-select">
+            <option value="smart">Умная сортировка</option>
+            <option value="name">По названию</option>
+            <option value="qty-asc">Кол-во: меньше → больше</option>
+            <option value="qty-desc">Кол-во: больше → меньше</option>
+          </select>
+        </div>
+        <div class="stats-bar">
+          <span id="statsText">Товаров: 0</span>
+        </div>
       </div>
-      <div class="filter-group">
-        <select id="categoryFilter" class="filter-select">
-          <option value="all">Все категории</option>
-          <option value="drinks">Напитки</option>
-          <option value="disposable">Одноразовая посуда</option>
-          <option value="food">Продукты</option>
-          <option value="cleaning">Чистящие средства</option>
-          <option value="other">Прочее</option>
-        </select>
-        <select id="sortFilter" class="filter-select">
-          <option value="name">По названию</option>
-          <option value="qty-asc">Кол-во: меньше → больше</option>
-          <option value="qty-desc">Кол-во: больше → меньше</option>
-        </select>
-      </div>
-      <div class="stats-bar">
-        <span id="statsText">Товаров: 0</span>
+
+      <!-- Быстрые фильтры (умный фильтр) -->
+      <div class="quick-filters" id="quickFilters">
+        <button class="quick-chip active" data-stock="all">
+          <span class="quick-chip__dot quick-chip__dot--all"></span>
+          Все
+        </button>
+        <button class="quick-chip quick-chip--low" data-stock="low">
+          <span class="quick-chip__dot quick-chip__dot--low"></span>
+          ⚠ Мало запасов
+          <span class="quick-chip__count" id="countLow">0</span>
+        </button>
+        <button class="quick-chip quick-chip--out" data-stock="out">
+          <span class="quick-chip__dot quick-chip__dot--out"></span>
+          ❌ Нет в наличии
+          <span class="quick-chip__count" id="countOut">0</span>
+        </button>
+        <button class="quick-chip quick-chip--ok" data-stock="ok">
+          <span class="quick-chip__dot quick-chip__dot--ok"></span>
+          ✓ В наличии
+          <span class="quick-chip__count" id="countOk">0</span>
+        </button>
       </div>
     </div>
   </div>
 
   <!-- ===== MAIN GRID ===== -->
-  <main class="main">
-    <div class="products-grid" id="productsGrid">
-      <!-- Cards rendered by JS -->
-    </div>
+  <main class="main" id="mainContent" style="display:none">
+    <div class="products-grid" id="productsGrid"></div>
     <div class="empty-state" id="emptyState" style="display:none;">
       <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="10" y="20" width="60" height="45" rx="6" stroke="#ccc" stroke-width="3"/>
@@ -238,37 +422,6 @@
     </div>
   </div>
 
-  <!-- ===== MODAL: PASSWORD ===== -->
-  <div class="modal-overlay" id="passwordModal">
-    <div class="modal modal--password">
-      <button class="modal__close" id="passwordModalClose">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-      <div class="password-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="8" y="22" width="32" height="22" rx="5" fill="#FF6B35" opacity="0.1" stroke="#FF6B35" stroke-width="2"/>
-          <path d="M16 22v-6a8 8 0 0116 0v6" stroke="#FF6B35" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="24" cy="33" r="3" fill="#FF6B35"/>
-          <line x1="24" y1="36" x2="24" y2="40" stroke="#FF6B35" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <h2>Введите пароль</h2>
-      <p>Для редактирования требуется пароль администратора</p>
-      <div class="password-input-wrap">
-        <input type="password" id="passwordInput" placeholder="Пароль..." />
-        <button id="passwordToggle" class="password-toggle" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-        </button>
-      </div>
-      <div class="password-error" id="passwordError" style="display:none;">Неверный пароль. Попробуйте снова.</div>
-      <button class="btn-save btn-save--full" id="passwordSubmitBtn">Войти</button>
-    </div>
-  </div>
-
   <!-- ===== CONFIRM DELETE MODAL ===== -->
   <div class="modal-overlay" id="confirmModal">
     <div class="modal modal--confirm">
@@ -288,7 +441,26 @@
     </div>
   </div>
 
-  <!-- ===== TOAST NOTIFICATION ===== -->
+  <!-- ===== CONFIRM DELETE USER MODAL ===== -->
+  <div class="modal-overlay" id="confirmUserModal">
+    <div class="modal modal--confirm">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="#FF3B30" opacity="0.1" stroke="#FF3B30" stroke-width="2"/>
+          <line x1="24" y1="14" x2="24" y2="28" stroke="#FF3B30" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="24" cy="34" r="2" fill="#FF3B30"/>
+        </svg>
+      </div>
+      <h2>Удалить аккаунт?</h2>
+      <p id="confirmUserText">Это действие нельзя отменить.</p>
+      <div class="confirm-btns">
+        <button class="btn-cancel" id="confirmUserCancelBtn">Отмена</button>
+        <button class="btn-delete-confirm" id="confirmUserDeleteBtn">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TOAST ===== -->
   <div class="toast" id="toast"></div>
 
   <!-- ===== PRINT AREA ===== -->
@@ -296,7 +468,7 @@
     <div class="print-header">
       <div class="print-logo">
         <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
-          <rect width="36" height="36" rx="10" fill="#FF6B35"/>
+          <rect width="36" height="36" rx="10" fill="#1877F2"/>
           <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
         <strong>Склад Mone</strong>
@@ -327,7 +499,6 @@
     </div>
   </div>
 
-  <!-- Firebase через ES модуль — обязательно type="module" -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
