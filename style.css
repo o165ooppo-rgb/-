@@ -52,17 +52,48 @@
 
 /* ===================== RESET ===================== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
 body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text-primary);
   min-height: 100vh;
+  min-height: 100dvh; /* динамическая высота для мобильных */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 15px;
+  overflow-x: hidden;
+  width: 100%;
+  position: relative;
 }
-button, input, select, textarea { font-family: var(--font); font-size: inherit; }
+button, input, select, textarea {
+  font-family: var(--font);
+  font-size: inherit;
+}
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+img { max-width: 100%; height: auto; display: block; }
+input, select, textarea {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* На мобильных все input >= 16px чтобы iOS не делал zoom при фокусе */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  input[type="email"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
 
 /* ===================== AUTH OVERLAY ===================== */
 .auth-overlay {
@@ -1540,50 +1571,319 @@ button, input, select, textarea { font-family: var(--font); font-size: inherit; 
   75%      { transform: translateX(5px); }
 }
 
-/* ===================== RESPONSIVE ===================== */
-@media (max-width: 900px) {
-  .header__title { display: none; }
-  .btn-manager span { display: none; }
+/* =====================================================
+   RESPONSIVE — ПОЛНАЯ АДАПТИВНОСТЬ ДЛЯ ВСЕХ УСТРОЙСТВ
+   Breakpoints:
+     XS:  до 380px   (маленькие телефоны)
+     SM:  381-575px  (телефоны)
+     MD:  576-767px  (большие телефоны / маленькие планшеты)
+     LG:  768-991px  (планшеты)
+     XL:  992-1199px (маленькие ноутбуки)
+     XXL: 1200-1599px (десктопы)
+     HD:  1600px+    (большие мониторы)
+   ===================================================== */
+
+/* ---------- iOS Safe Area (iPhone с челкой) ---------- */
+@supports (padding: max(0px)) {
+  .header__inner {
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+  .toolbar__inner {
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+  }
+  .main {
+    padding-left:  max(20px, env(safe-area-inset-left));
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-bottom: max(60px, env(safe-area-inset-bottom));
+  }
 }
 
-@media (max-width: 768px) {
-  .header__inner { padding: 0 14px; gap: 10px; }
-  .btn-add span  { display: none; }
-  .btn-add       { padding: 8px 10px; }
-  .btn-icon span { display: none; }
-  .btn-icon      { padding: 7px 10px; }
-  .user-chip__name { display: none; }
+/* ---------- HD: большие мониторы (1600px+) ---------- */
+@media (min-width: 1600px) {
+  .header__inner,
+  .toolbar__inner,
+  .main {
+    max-width: 1520px;
+  }
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 18px;
+  }
+  body { font-size: 15.5px; }
+}
 
+/* ---------- XXL: стандартный десктоп (1200-1599px) ---------- */
+@media (max-width: 1599px) and (min-width: 1200px) {
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+  }
+}
+
+/* ---------- XL: маленький ноутбук (992-1199px) ---------- */
+@media (max-width: 1199px) {
+  .header__inner,
+  .toolbar__inner,
+  .main {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+}
+
+/* ---------- LG: планшеты горизонтально / маленький ноутбук (≤991px) ---------- */
+@media (max-width: 991px) {
+  .header__title { display: none; }       /* Логотип остаётся, текст скрываем */
+  .btn-manager span { display: none; }
+  .btn-manager { padding: 7px 9px; }
+
+  .branches { gap: 4px; }
+  .branch-btn { padding: 6px 12px; font-size: 13px; }
+
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 12px;
+  }
+
+  .main { padding: 16px 16px 50px; }
+}
+
+/* ---------- MD: планшеты вертикально / большие телефоны (≤767px) ---------- */
+@media (max-width: 767px) {
+  :root {
+    --header-h: 54px;
+  }
+
+  /* Header: компактный */
+  .header__inner { padding: 0 14px; gap: 8px; height: var(--header-h); }
+  .header__logo-icon { width: 30px; height: 30px; }
+
+  /* Кнопки в шапке: только иконки */
+  .btn-add span, .btn-icon span { display: none; }
+  .btn-add  { padding: 8px 11px; }
+  .btn-icon { padding: 8px 10px; }
+  .user-chip__name { display: none; }
+  .user-chip { padding: 4px; }
+  .user-chip__avatar { width: 30px; height: 30px; font-size: 13px; }
+
+  /* Sync индикатор скрываем на мобильных */
+  .sync-indicator { display: none; }
+
+  /* Филиалы — горизонтальный скролл */
+  .branches {
+    flex: 1;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .branches::-webkit-scrollbar { display: none; }
+  .branch-btn { flex-shrink: 0; padding: 6px 12px; font-size: 12.5px; }
+
+  /* Toolbar */
   .toolbar { height: auto; }
   .toolbar__inner { padding: 10px 14px; gap: 8px; }
   .toolbar__row    { flex-wrap: wrap; gap: 8px; }
-  .search-wrap    { max-width: 100%; width: 100%; order: -1; }
-  .filter-group   { gap: 6px; }
-  .filter-select  { font-size: 12.5px; }
-  .quick-filters  { gap: 6px; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+  .search-wrap     { max-width: 100%; width: 100%; order: -1; flex: 1 1 100%; }
+  .filter-group    { gap: 6px; flex: 1; }
+  .filter-select   { font-size: 12.5px; flex: 1; }
+  .stats-bar       { display: none; }
+
+  /* Быстрые фильтры — горизонтальный скролл */
+  .quick-filters {
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -14px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
   .quick-filters::-webkit-scrollbar { display: none; }
-  .quick-chip     { font-size: 12px; padding: 5px 11px; flex-shrink: 0; }
+  .quick-chip { font-size: 12px; padding: 6px 11px; flex-shrink: 0; }
   .quick-chip__count { font-size: 10px; min-width: 18px; height: 16px; }
-  .stats-bar      { display: none; }
 
+  /* Сетка товаров */
   .main           { padding: 14px 14px 40px; }
-  .products-grid  { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
+  .products-grid  { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
 
-  .modal--view    { grid-template-columns: 1fr; }
-  .modal__image-wrap { min-height: 180px; max-height: 200px; }
+  /* Модальные окна */
+  .modal--view    { grid-template-columns: 1fr; max-height: 92vh; }
+  .modal__image-wrap { min-height: 180px; max-height: 220px; }
+  .modal__body    { padding: 16px; }
+  .modal__title   { font-size: 16px; }
 
-  .modal--edit    { padding: 18px; }
+  .modal--edit    { padding: 16px; max-height: 92vh; overflow-y: auto; }
   .form-grid      { grid-template-columns: 1fr; gap: 10px; }
   .form-group--full { grid-column: 1; }
   .branches-qty-grid { grid-template-columns: 1fr; }
 
-  .sync-indicator { display: none; }
-  .manager-panel  { width: 100%; }
+  /* Менеджерская панель — слайд снизу */
+  .manager-panel  { width: 100%; max-width: 100%; }
+
+  /* Touch-friendly: все интерактивные элементы минимум 40px */
+  .qty-btn        { width: 38px; height: 38px; }
+  .branch-btn     { min-height: 32px; }
+  .quick-chip     { min-height: 30px; }
 }
 
-@media (max-width: 480px) {
-  .branches       { gap: 2px; }
-  .branch-btn     { padding: 5px 11px; font-size: 12.5px; }
-  .products-grid  { grid-template-columns: 1fr 1fr; gap: 9px; }
-  .auth-box       { padding: 28px 20px 24px; }
+/* ---------- SM: средние телефоны (≤575px) ---------- */
+@media (max-width: 575px) {
+  .header__inner { padding: 0 12px; gap: 6px; }
+  .header__brand { gap: 8px; }
+
+  /* Уменьшаем индикаторы */
+  .btn-manager { padding: 6px 8px; }
+  .btn-add { padding: 8px 10px; }
+  .btn-icon { padding: 7px 9px; }
+
+  /* Сетка: всегда 2 колонки */
+  .main { padding: 12px 12px 40px; }
+  .products-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 9px;
+  }
+  .product-card__body { padding: 10px 11px 11px; }
+  .product-card__name { font-size: 13.5px; }
+  .product-card__category { font-size: 10px; }
+  .product-card__total-value { font-size: 14px; }
+  .branch-row { font-size: 11.5px; }
+  .branch-row__qty { font-size: 12px; }
+
+  /* Toolbar еще компактнее */
+  .toolbar__inner { padding: 9px 12px; gap: 7px; }
+  .filter-select { padding: 7px 24px 7px 9px; font-size: 12px; }
+  .search-input { padding: 8px 12px 8px 32px; font-size: 13.5px; }
+
+  /* Auth */
+  .auth-box { padding: 28px 20px 24px; }
+  .auth-title { font-size: 19px; }
+
+  /* Модалки на всю ширину с минимальными отступами */
+  .modal-overlay { padding: 8px; }
+  .modal { max-width: 100%; border-radius: var(--radius); }
+  .modal--view { border-radius: var(--radius); }
+
+  /* Toast снизу */
+  .toast {
+    left: 12px;
+    right: 12px;
+    bottom: 14px;
+    transform: translateY(20px);
+    width: auto;
+    text-align: center;
+  }
+  .toast.show { transform: translateY(0); }
 }
+
+/* ---------- XS: маленькие телефоны (≤380px) ---------- */
+@media (max-width: 380px) {
+  body { font-size: 14px; }
+
+  .header__inner { padding: 0 10px; gap: 5px; }
+  .header__logo-icon { width: 28px; height: 28px; }
+
+  .branch-btn { padding: 5px 9px; font-size: 12px; }
+
+  .btn-add  { padding: 7px 9px; }
+  .btn-add svg { width: 13px; height: 13px; }
+  .btn-icon { padding: 6px 8px; }
+  .btn-icon svg { width: 13px; height: 13px; }
+  .user-chip__avatar { width: 28px; height: 28px; font-size: 12px; }
+
+  .toolbar__inner { padding: 8px 10px; gap: 6px; }
+  .search-input { font-size: 13px; padding: 7px 10px 7px 30px; }
+  .filter-select { font-size: 11.5px; padding: 6px 22px 6px 8px; }
+
+  .quick-chip { font-size: 11.5px; padding: 5px 10px; }
+  .quick-filters { margin: 0 -10px; padding-left: 10px; padding-right: 10px; }
+
+  .main { padding: 10px 10px 36px; }
+  .products-grid { gap: 8px; }
+  .product-card__body { padding: 9px 10px 10px; }
+  .product-card__name { font-size: 13px; }
+  .product-card__total-value { font-size: 13.5px; }
+
+  /* Auth */
+  .auth-box { padding: 22px 16px 18px; border-radius: 14px; }
+  .auth-title { font-size: 18px; }
+  .auth-sub { font-size: 13px; }
+  .auth-field input { font-size: 14px; padding: 10px 12px; }
+  .auth-btn { padding: 11px; font-size: 14px; }
+
+  /* Модалки */
+  .modal--edit, .modal--password, .modal--confirm { padding: 16px; }
+  .modal__heading { font-size: 16px; }
+  .form-group label { font-size: 12px; }
+  .form-group input,
+  .form-group select,
+  .form-group textarea { font-size: 13.5px; padding: 9px 10px; }
+
+  /* Менеджер */
+  .manager-tabs { padding: 0 10px; }
+  .manager-tab { font-size: 12px; padding: 9px 10px; }
+}
+
+/* ---------- ОЧЕНЬ маленькие экраны (≤340px) — резервный вариант ---------- */
+@media (max-width: 340px) {
+  .products-grid { grid-template-columns: 1fr; }
+  .filter-group { flex-direction: column; width: 100%; }
+  .filter-select { width: 100%; }
+}
+
+/* ---------- ЛАНДШАФТНАЯ ОРИЕНТАЦИЯ ТЕЛЕФОНА ---------- */
+@media (max-height: 500px) and (orientation: landscape) {
+  .auth-overlay { padding: 10px; align-items: flex-start; padding-top: 10px; }
+  .auth-box { max-height: 95vh; overflow-y: auto; padding: 20px 28px; }
+
+  .modal--view { grid-template-columns: 200px 1fr; max-height: 95vh; }
+  .modal__image-wrap { min-height: 100%; max-height: none; }
+
+  .modal--edit, .modal--password { max-height: 95vh; overflow-y: auto; }
+}
+
+/* ---------- РЕТИНА / HIGH-DPI ---------- */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  body { -webkit-font-smoothing: antialiased; }
+}
+
+/* ---------- HOVER ТОЛЬКО НА УСТРОЙСТВАХ С МЫШЬЮ ---------- */
+@media (hover: none) {
+  .product-card:hover { transform: none; }
+  .product-card:hover .product-card__image { transform: none; }
+  .branch-btn:hover { background: transparent; color: var(--text-secondary); }
+  .branch-btn.active:hover { background: var(--accent-light); color: var(--accent); }
+  .quick-chip:hover { transform: none; background: var(--surface); border-color: var(--border); }
+}
+
+/* ---------- УМЕНЬШЕННАЯ АНИМАЦИЯ (доступность) ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .product-card--out, .product-card--low { animation: none !important; }
+  .quick-chip__dot--out { animation: none !important; }
+}
+
+/* ---------- ТЁМНАЯ ТЕМА (системная) — опционально ---------- */
+/* Закомментировано, можно включить если нужна автоматическая темная тема
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18191A;
+    --surface: #242526;
+    --surface2: #3A3B3C;
+    --border: #3E4042;
+    --text-primary: #E4E6EB;
+    --text-secondary: #B0B3B8;
+    --text-muted: #8A8D91;
+  }
+}
+*/
