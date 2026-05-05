@@ -157,6 +157,15 @@
   <!-- ===== HEADER ===== -->
   <header class="header" id="mainHeader" style="display:none">
     <div class="header__inner">
+      <!-- Бургер-меню (только на мобильных) -->
+      <button class="btn-burger" id="burgerBtn" aria-label="Меню">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+
       <div class="header__brand">
         <svg class="header__logo-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="36" height="36" rx="10" fill="#1877F2"/>
@@ -165,6 +174,7 @@
         <span class="header__title">Склад Mone</span>
       </div>
 
+      <!-- Филиалы (только на десктопе) -->
       <nav class="branches" id="branches">
         <button class="branch-btn active" data-branch="all">Все филиалы</button>
         <button class="branch-btn" data-branch="branch1">Сибирский</button>
@@ -175,13 +185,13 @@
       <div class="header__actions">
         <span class="sync-indicator sync--connecting" id="syncIndicator">⏳ Подключение...</span>
 
-        <!-- Кнопка менеджера (видна только менеджерам) -->
+        <!-- Кнопка менеджера (видна только менеджерам, скрыта на мобильных) -->
         <button class="btn-manager" id="managerPanelBtn" style="display:none" title="Панель менеджера">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span>Менеджер</span>
         </button>
 
-        <!-- Юзер аватар -->
+        <!-- Юзер аватар (на десктопе) -->
         <div class="user-chip" id="userChip">
           <div class="user-chip__avatar" id="userAvatar">?</div>
           <span class="user-chip__name" id="userChipName"></span>
@@ -211,11 +221,159 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
-          Добавить товар
+          <span>Добавить товар</span>
         </button>
       </div>
     </div>
+
+    <!-- Мобильный индикатор филиала (под шапкой, только на мобильных) -->
+    <button class="branch-indicator" id="branchIndicator">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+      <span class="branch-indicator__label">Филиал:</span>
+      <span class="branch-indicator__value" id="branchIndicatorValue">Все филиалы</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="branch-indicator__chevron">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
   </header>
+
+  <!-- ===== МОБИЛЬНОЕ БОКОВОЕ МЕНЮ (Drawer) ===== -->
+  <div class="drawer-overlay" id="drawerOverlay">
+    <div class="drawer" id="drawer">
+      <!-- Профиль -->
+      <div class="drawer-profile">
+        <div class="drawer-profile__avatar" id="drawerAvatar">?</div>
+        <div class="drawer-profile__info">
+          <div class="drawer-profile__name" id="drawerName">—</div>
+          <div class="drawer-profile__role" id="drawerRole">—</div>
+        </div>
+        <button class="drawer-close" id="drawerCloseBtn" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Sync индикатор -->
+      <div class="drawer-sync" id="drawerSync">
+        <span id="drawerSyncDot" class="drawer-sync__dot"></span>
+        <span id="drawerSyncText">Подключение...</span>
+      </div>
+
+      <!-- Действия -->
+      <div class="drawer-section">
+        <div class="drawer-section__title">Действия</div>
+
+        <button class="drawer-item" id="drawerBranchBtn">
+          <span class="drawer-item__icon">📍</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Филиал</span>
+            <span class="drawer-item__sub" id="drawerBranchSub">Все филиалы</span>
+          </span>
+          <svg class="drawer-item__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </button>
+
+        <button class="drawer-item" id="drawerAddBtn">
+          <span class="drawer-item__icon">➕</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Добавить товар</span>
+          </span>
+        </button>
+
+        <button class="drawer-item" id="drawerPrintBtn">
+          <span class="drawer-item__icon">🖨️</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Печать отчёта</span>
+          </span>
+        </button>
+
+        <button class="drawer-item" id="drawerManagerBtn" style="display:none">
+          <span class="drawer-item__icon">👥</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Панель менеджера</span>
+          </span>
+        </button>
+      </div>
+
+      <!-- Выход -->
+      <div class="drawer-footer">
+        <button class="drawer-item drawer-item--danger" id="drawerLogoutBtn">
+          <span class="drawer-item__icon">🚪</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Выйти из аккаунта</span>
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== МОДАЛКА ВЫБОРА ФИЛИАЛА ===== -->
+  <div class="modal-overlay" id="branchModal">
+    <div class="modal modal--branch">
+      <button class="modal__close" id="branchModalClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <h2 class="branch-modal__title">Выберите филиал</h2>
+      <p class="branch-modal__sub">Покажем остатки только этого филиала</p>
+      <div class="branch-modal__list" id="branchModalList">
+        <button class="branch-option active" data-branch="all">
+          <div class="branch-option__icon">🏢</div>
+          <div class="branch-option__content">
+            <div class="branch-option__name">Все филиалы</div>
+            <div class="branch-option__desc" id="branchStatAll">— товаров</div>
+          </div>
+          <div class="branch-option__check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </button>
+        <button class="branch-option" data-branch="branch1">
+          <div class="branch-option__icon">🏪</div>
+          <div class="branch-option__content">
+            <div class="branch-option__name">Сибирский</div>
+            <div class="branch-option__desc" id="branchStat1">— товаров</div>
+          </div>
+          <div class="branch-option__check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </button>
+        <button class="branch-option" data-branch="branch2">
+          <div class="branch-option__icon">🏪</div>
+          <div class="branch-option__content">
+            <div class="branch-option__name">Фреско</div>
+            <div class="branch-option__desc" id="branchStat2">— товаров</div>
+          </div>
+          <div class="branch-option__check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </button>
+        <button class="branch-option" data-branch="branch3">
+          <div class="branch-option__icon">🏪</div>
+          <div class="branch-option__content">
+            <div class="branch-option__name">Гелион</div>
+            <div class="branch-option__desc" id="branchStat3">— товаров</div>
+          </div>
+          <div class="branch-option__check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== SEARCH + FILTER BAR ===== -->
   <div class="toolbar" id="mainToolbar" style="display:none">
