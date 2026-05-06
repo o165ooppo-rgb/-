@@ -2244,3 +2244,362 @@ input, select, textarea {
   }
 }
 */
+
+/* ============================================================
+   ДОПОЛНЕНИЯ V2: фильтр-модалка, ролевые элементы, аккаунты
+   ============================================================ */
+
+/* ---------- AUTH: подсказка под формой ---------- */
+.auth-hint {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--accent-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  text-align: left;
+  border-left: 3px solid var(--accent);
+}
+.auth-hint strong { color: var(--accent); font-weight: 700; }
+
+/* ---------- FILTER BUTTON ---------- */
+.btn-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  position: relative;
+  white-space: nowrap;
+}
+.btn-filter:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+.btn-filter:active { transform: scale(0.97); }
+.btn-filter svg { width: 16px; height: 16px; }
+.btn-filter__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+/* На мобильных — компактнее */
+@media (max-width: 767px) {
+  .btn-filter { padding: 9px 12px; font-size: 13px; }
+  .btn-filter span:not(.btn-filter__badge) { display: inline; }
+}
+
+/* ---------- FILTER MODAL ---------- */
+.modal--filter {
+  max-width: 480px;
+  width: 100%;
+  padding: 28px 24px 22px;
+}
+.filter-modal__title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+.filter-modal__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 22px;
+}
+.filter-section {
+  margin-bottom: 18px;
+}
+.filter-section__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+}
+
+/* Чипы статуса в фильтре */
+.filter-stocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.filter-stock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--t-fast);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: left;
+}
+.filter-stock:hover {
+  background: var(--accent-subtle);
+}
+.filter-stock.active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.filter-stock__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.filter-stock__dot--all { background: var(--text-muted); }
+.filter-stock__dot--ok  { background: var(--success); }
+.filter-stock__dot--low { background: var(--warning); }
+.filter-stock__dot--out { background: var(--danger);  animation: pulse-out 1.6s infinite; }
+.filter-stock__label { flex: 1; }
+.filter-stock__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--surface);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+.filter-stock.active .filter-stock__count {
+  background: var(--accent);
+  color: #fff;
+}
+.filter-stock--out.active { background: var(--danger-light); border-color: var(--danger); color: var(--danger); }
+.filter-stock--out.active .filter-stock__count { background: var(--danger); }
+.filter-stock--low.active { background: var(--warning-light); border-color: var(--warning); color: #b06900; }
+.filter-stock--low.active .filter-stock__count { background: var(--warning); }
+.filter-stock--ok.active  { background: var(--success-light); border-color: var(--success); color: #2a7a1c; }
+.filter-stock--ok.active  .filter-stock__count { background: var(--success); }
+
+@keyframes pulse-out {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224,32,32,0.5); }
+  50%      { box-shadow: 0 0 0 6px rgba(224,32,32,0);   }
+}
+
+/* Сводка */
+.filter-summary {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 4px 0;
+  border: 1px solid var(--border-light);
+}
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+}
+.summary-row:last-child { border-bottom: none; }
+.summary-row strong { font-weight: 700; color: var(--text-primary); }
+.summary-row--total {
+  background: var(--accent-subtle);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+.summary-row--total strong { color: var(--accent); font-size: 16px; }
+
+/* Селекты в фильтр-модалке */
+.filter-fullselect {
+  width: 100%;
+  padding: 11px 14px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--t-fast);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2365676B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 14px;
+  padding-right: 36px;
+}
+.filter-fullselect:focus {
+  border-color: var(--accent);
+}
+
+.filter-modal__footer {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-light);
+}
+.filter-modal__footer button { flex: 1; }
+
+@media (max-width: 480px) {
+  .filter-stocks { grid-template-columns: 1fr; }
+  .modal--filter { padding: 22px 18px 18px; }
+}
+
+/* ---------- MANAGER PANEL: подсказка ---------- */
+.manager-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--accent-subtle);
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  border-left: 3px solid var(--accent);
+  line-height: 1.5;
+}
+
+/* ---------- MANAGER USER CARD: новые элементы ---------- */
+.user-tag-me {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+  margin-left: 4px;
+  background: var(--accent-subtle);
+  padding: 1px 6px;
+  border-radius: 8px;
+  vertical-align: middle;
+}
+.user-meta-login {
+  font-family: 'SF Mono', Monaco, Consolas, monospace;
+  background: var(--surface2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.manager-user-edit {
+  background: none;
+  border: none;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--t-fast);
+  flex-shrink: 0;
+}
+.manager-user-edit:hover {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+.manager-user-edit svg {
+  width: 16px;
+  height: 16px;
+}
+
+.manager-user-avatar.role-staff   { background: #1877F2; }
+.manager-user-avatar.role-manager { background: #8b5cf6; }
+
+/* Бейдж роли */
+.manager-user-role.role-badge-manager {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  color: #fff;
+}
+.manager-user-role.role-badge-staff {
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+
+/* ---------- LOG BRANCH TAG ---------- */
+.log-branch-tag {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--surface2);
+  color: var(--text-secondary);
+  padding: 2px 7px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.log-entry__icon.log-qtyEdit   { background: linear-gradient(135deg, #6366f1, #4338ca); color: #fff; }
+.log-entry__icon.log-photoEdit { background: linear-gradient(135deg, #ec4899, #be185d); color: #fff; }
+.log-entry__icon.log-userEdit  { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; }
+
+/* ---------- STAFF: превью товара (нередактируемая шапка) ---------- */
+.staff-product-info {
+  background: linear-gradient(135deg, var(--accent-subtle), #fff);
+  border: 1px solid var(--accent-light);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+.staff-product-info__cat {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 4px;
+}
+.staff-product-info__name {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+/* ---------- РОЛЕВЫЕ ОГРАНИЧЕНИЯ В UI ---------- */
+/* Кнопки печати/филиала растягиваются красиво для staff */
+body.role-staff .header__inner .branches { display: none !important; }
+body.role-staff .branch-indicator        { display: none !important; }
+
+/* На мобильных у staff бургер-меню тоже работает, но с меньшим набором действий */
+body.role-staff .drawer-item--branch { display: none !important; }
+
+/* ---------- MOBILE: filter button rendering tweaks ---------- */
+@media (max-width: 600px) {
+  .toolbar__row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .search-wrap { flex: 1 1 100%; order: -1; }
+  .btn-filter { flex: 0 0 auto; }
+  .stats-bar  { flex: 1 1 auto; text-align: right; font-size: 12px; }
+}
+
+/* ---------- УЛУЧШЕНИЯ AUTH: убрана регистрация ---------- */
+.auth-screen { display: block; }
+
+/* Удалить стили, привязанные к выбору режимов (были авто-скрыты) */
+
+/* ---------- modal--password корректировки ---------- */
+.modal--password {
+  max-width: 420px;
+  padding: 26px 24px 22px;
+}
+
