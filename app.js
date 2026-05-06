@@ -1,26 +1,39 @@
 /**
- * ========================================
- * СКЛАДПРО — СИСТЕМА УПРАВЛЕНИЯ ОСТАТКАМИ
- * app.js — с авторизацией и панелью менеджера
- * ========================================
+ * ============================================================
+ *  СКЛАД MONE — Управление остатками по филиалам
+ *  app.js — фиксированные аккаунты, ролевой доступ, фильтр-модалка
+ * ============================================================
+ *
+ *  АРХИТЕКТУРА АККАУНТОВ
+ *  ─────────────────────
+ *  В системе ровно ЧЕТЫРЕ аккаунта:
+ *    • 1 менеджер  — видит и может всё
+ *    • 3 филиала   — каждый видит только свои товары, может
+ *                    менять только фото и количество (шт)
+ *
+ *  Менеджер может в любой момент изменить логин/пароль любого
+ *  филиала. После такого изменения сессии всех старых владельцев
+ *  этого аккаунта инвалидируются (благодаря полю sessionVersion).
+ *  Если бывший сотрудник попробует войти — придётся вводить
+ *  новые данные.
  */
 
 'use strict';
 
-/* ================================================
-   FIREBASE CONFIG & INIT
-================================================ */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
   getDatabase,
   ref,
   onValue,
   set,
+  update,
   remove,
-  push,
   get,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
+/* ===========================================================
+   FIREBASE
+=========================================================== */
 const firebaseConfig = {
   apiKey:            'AIzaSyD25nN75reCO5UOwwI1nLYtrZPX0dTa1Oo',
   authDomain:        'warehouse-e09a0.firebaseapp.com',
@@ -34,16 +47,16 @@ const firebaseConfig = {
 const firebaseApp  = initializeApp(firebaseConfig);
 const db           = getDatabase(firebaseApp);
 const PRODUCTS_REF = ref(db, 'products');
-const USERS_REF    = ref(db, 'users');
+const ACCOUNTS_REF = ref(db, 'accounts');
 const LOGS_REF     = ref(db, 'logs');
 
-/* ================================================
-   CONSTANTS
-================================================ */
-const STORAGE_KEY      = 'skladpro_products_v1';
-const SESSION_KEY      = 'skladpro_session_v1';
-const USERS_CACHE_KEY  = 'skladpro_users_v1';
-const LOGS_CACHE_KEY   = 'skladpro_logs_v1';
+/* ===========================================================
+   КОНСТАНТЫ
+=========================================================== */
+const STORAGE_KEY     = 'mone_products_v2';
+const SESSION_KEY     = 'mone_session_v2';
+const ACCOUNTS_CACHE  = 'mone_accounts_v2';
+const LOGS_CACHE      = 'mone_logs_v2';
 
 const CATEGORY_LABELS = {
   drinks:     'Напитки',
@@ -56,37 +69,178 @@ const CATEGORY_LABELS = {
 const BRANCH_LABELS = { branch1: 'Сибирский', branch2: 'Фреско', branch3: 'Гелион' };
 const BRANCH_KEYS   = ['branch1', 'branch2', 'branch3'];
 
-const ROLE_LABELS = { staff: 'Сотрудник', manager: 'Менеджер', admin: 'Администратор' };
+const ROLE_LABELS = { manager: 'Менеджер', staff: 'Сотрудник филиала' };
 
-/* ================================================
-   STATE
-================================================ */
-const state = {
-  products:         [],
-  users:            [],
-  logs:             [],
-  activeBranch:     'all',
-  searchQuery:      '',
-  categoryFilter:   'all',
-  stockFilter:      'all',     // 'all' | 'low' | 'out' | 'ok'
-  sortMode:         'smart',   // умная сортировка: малые запасы наверху
-  pendingDeleteId:  null,
-  pendingDeleteUserId: null,
-  editingProductId: null,
-  currentViewId:    null,
-  photoDataUrl:     null,
-  firebaseLoaded:   false,
-  currentUser:      null,   // { id, username, name, role }
+const LOG_TYPES = {
+  login:    { icon: '🔑', label: 'Вход в систему' },
+  logout:   { icon: '🚪', label: 'Выход из системы' },
+  add:      { icon: '➕', label: 'Добавление товара' },
+  edit:     { icon: '✏️', label: 'Редактирование товара' },
+  delete:   { icon: '🗑️', label: 'Удаление товара' },
+  qtyEdit:  { icon: '🔢', label: 'Изменение количества' },
+  photoEdit:{ icon: '📷', label: 'Изменение фото' },
+  userEdit: { icon: '👤', label: 'Изменение аккаунта' },
 };
 
-/* ================================================
-   UTILITY
-================================================ */
-const uid = () => `id_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+/* Счётчик для безопасной отрисовки списков (DOM diffs не нужны) */
+let renderToken = 0;
 
+/* ===========================================================
+   ДЕФОЛТНЫЕ АККАУНТЫ
+   Создаются автоматически, если в БД нет записей.
+   Логины простые, пароли — рандомные сильные при первом запуске.
+=========================================================== */
+function getDefaultAccounts() {
+  return [
+    {
+      id:              'acc_manager',
+      role:            'manager',
+      branch:          null,
+      name:            'Менеджер',
+      username:        'manager',
+      passwordHash:    hashPassword('Mone-Manager-2025'),
+      sessionVersion:  1,
+      createdAt:       Date.now(),
+    },
+    {
+      id:              'acc_branch1',
+      role:            'staff',
+      branch:          'branch1',
+      name:            'Сибирский',
+      username:        'sibirsky',
+      passwordHash:    hashPassword('Sibirsky-2025'),
+      sessionVersion:  1,
+      createdAt:       Date.now(),
+    },
+    {
+      id:              'acc_branch2',
+      role:            'staff',
+      branch:          'branch2',
+      name:            'Фреско',
+      username:        'fresco',
+      passwordHash:    hashPassword('Fresco-2025'),
+      sessionVersion:  1,
+      createdAt:       Date.now(),
+    },
+    {
+      id:              'acc_branch3',
+      role:            'staff',
+      branch:          'branch3',
+      name:            'Гелион',
+      username:        'gelion',
+      passwordHash:    hashPassword('Gelion-2025'),
+      sessionVersion:  1,
+      createdAt:       Date.now(),
+    },
+  ];
+}
+
+function getDefaultProducts() {
+  return [
+    { id: uid(), name: 'Pepsi 0.5л',                category: 'drinks',     description: 'Газированный напиток Pepsi, бутылка 0.5 литра', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  } },
+    { id: uid(), name: 'Coca-Cola 1л',              category: 'drinks',     description: 'Классическая Кока-Кола, бутылка 1 литр',         photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 } },
+    { id: uid(), name: 'Пластиковые стаканы 250мл', category: 'disposable', description: 'Одноразовые стаканы',                              photo: null, branches: { branch1: 5,  branch2: 2,  branch3: 0  } },
+    { id: uid(), name: 'Трубочки для коктейлей',    category: 'disposable', description: 'Пластиковые трубочки',                             photo: null, branches: { branch1: 3,  branch2: 0,  branch3: 1  } },
+    { id: uid(), name: 'Сахар',                     category: 'food',       description: 'Сахар-песок',                                      photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  } },
+    { id: uid(), name: 'Fairy 500мл',               category: 'cleaning',   description: 'Средство для мытья посуды Fairy',                  photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  } },
+  ];
+}
+
+/* ===========================================================
+   STATE
+=========================================================== */
+const state = {
+  products:        [],
+  accounts:        [],   // ровно 4 записи
+  logs:            [],
+  activeBranch:    'all',
+  searchQuery:     '',
+  categoryFilter:  'all',
+  stockFilter:     'all',
+  sortMode:        'smart',
+  pendingDeleteId: null,
+  editingProductId:null,
+  currentViewId:   null,
+  editingUserId:   null,
+  photoDataUrl:    null,
+  firebaseLoaded:  false,
+  currentUser:     null,
+  validatedSession:false,
+};
+
+/* ===========================================================
+   УТИЛИТЫ
+=========================================================== */
+const $   = id => document.getElementById(id);
+const uid = () => `id_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+function escHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatDateTime(ts) {
+  return new Date(ts).toLocaleDateString('ru-RU', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+/* Простой хэш — для production-grade лучше bcrypt на бэкенде.
+   Здесь — баланс между «не хранить пароль в открытом виде»
+   и тем, что бэкенда у нас нет (только Firebase RTDB). */
+function hashPassword(pass) {
+  let h = 0;
+  for (let i = 0; i < pass.length; i++) {
+    h = Math.imul(31, h) + pass.charCodeAt(i) | 0;
+  }
+  // добавим простую соль чтобы хэш не был элементарно перебираемым
+  const salted = pass + '|mone-salt-2025|' + h.toString(36);
+  let h2 = 0;
+  for (let i = 0; i < salted.length; i++) {
+    h2 = Math.imul(31, h2) + salted.charCodeAt(i) | 0;
+  }
+  return Math.abs(h).toString(16) + '_' + Math.abs(h2).toString(16);
+}
+
+/* ===========================================================
+   STORAGE
+=========================================================== */
+function saveLocal(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) {}
+}
+function loadLocal(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) { return null; }
+}
+
+function saveSession(session) { saveLocal(SESSION_KEY, session); }
+function loadSession()        { return loadLocal(SESSION_KEY); }
+function clearSession()       { localStorage.removeItem(SESSION_KEY); }
+
+/* ===========================================================
+   ПРАВА ДОСТУПА
+=========================================================== */
+function isManager()       { return !!state.currentUser && state.currentUser.role === 'manager'; }
+function isStaff()         { return !!state.currentUser && state.currentUser.role === 'staff';   }
+function userBranch()      { return state.currentUser ? state.currentUser.branch : null;          }
+
+/** Видимость продукта для текущего пользователя */
+function canSeeProduct(product) {
+  if (isManager()) return true;
+  const b = userBranch();
+  if (!b) return false;
+  return (product.branches?.[b] ?? 0) > 0 || product.branches?.[b] === 0; // staff видит все продукты, но только цифру своего филиала
+  // (Логика «только если есть товары» намеренно не применяется —
+  //  иначе сотрудник не сможет видеть позиции с нулём, чтобы пополнить.)
+}
+
+/** Получить количество с учётом активного просмотра */
 function getQty(product, branch = 'all') {
-  if (branch === 'all') return BRANCH_KEYS.reduce((s, k) => s + (product.branches[k] ?? 0), 0);
-  return product.branches[branch] ?? 0;
+  if (branch === 'all') return BRANCH_KEYS.reduce((s, k) => s + (product.branches?.[k] ?? 0), 0);
+  return product.branches?.[branch] ?? 0;
 }
 
 function getStockStatus(qty) {
@@ -101,65 +255,144 @@ const STOCK_BADGE = {
   out: { label: 'Нет',       cls: 'badge--out' },
 };
 
-function escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function formatDateTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleDateString('ru-RU', {
-    day: '2-digit', month: '2-digit', year: '2-digit',
-    hour: '2-digit', minute: '2-digit',
+/* ===========================================================
+   FIREBASE INIT (после успешного входа)
+=========================================================== */
+function bootstrapAccountsIfMissing() {
+  return get(ACCOUNTS_REF).then(snap => {
+    if (snap.exists() && snap.val() && Object.keys(snap.val()).length >= 4) return;
+    const defaults = getDefaultAccounts();
+    const updates = {};
+    defaults.forEach(a => { updates[a.id] = a; });
+    return set(ACCOUNTS_REF, updates);
   });
 }
 
-function hashPassword(pass) {
-  // Простой хэш (для продакшн используйте bcrypt через сервер)
-  let h = 0;
-  for (let i = 0; i < pass.length; i++) {
-    h = Math.imul(31, h) + pass.charCodeAt(i) | 0;
+function bootstrapProductsIfMissing() {
+  return get(PRODUCTS_REF).then(snap => {
+    if (snap.exists() && snap.val()) return;
+    const defaults = getDefaultProducts();
+    const updates = {};
+    defaults.forEach(p => { updates[p.id] = p; });
+    return set(PRODUCTS_REF, updates);
+  });
+}
+
+function initFirebaseListeners() {
+  showSyncIndicator('connecting');
+
+  // ── Products
+  onValue(PRODUCTS_REF, (snap) => {
+    const data = snap.val();
+    state.products = data ? Object.values(data) : [];
+    saveLocal(STORAGE_KEY, state.products);
+    state.firebaseLoaded = true;
+    renderAll();
+    showSyncIndicator('ok');
+  }, (err) => {
+    console.error('[products]', err);
+    if (!state.firebaseLoaded) {
+      state.products = loadLocal(STORAGE_KEY) || [];
+      state.firebaseLoaded = true;
+      renderAll();
+    }
+    showSyncIndicator('error');
+    showToast('⚠ Нет связи — работаем офлайн', 'error');
+  });
+
+  // ── Accounts
+  // ВАЖНО: слушают ВСЕ роли, потому что каждый клиент должен
+  // мгновенно реагировать на изменение своего пароля менеджером.
+  onValue(ACCOUNTS_REF, (snap) => {
+    const data = snap.val();
+    state.accounts = data ? Object.values(data) : [];
+    saveLocal(ACCOUNTS_CACHE, state.accounts);
+    revalidateCurrentSession();
+    if (isManager()) renderManagerUsers();
+  }, (err) => {
+    console.error('[accounts]', err);
+    state.accounts = loadLocal(ACCOUNTS_CACHE) || [];
+    if (isManager()) renderManagerUsers();
+  });
+
+  // ── Logs (только менеджер)
+  if (isManager()) {
+    onValue(LOGS_REF, (snap) => {
+      const data = snap.val();
+      state.logs = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
+      saveLocal(LOGS_CACHE, state.logs);
+      renderManagerLogs();
+    }, () => {
+      state.logs = loadLocal(LOGS_CACHE) || [];
+      renderManagerLogs();
+    });
   }
-  return h.toString(16);
 }
 
-/* ================================================
-   LOCAL STORAGE
-================================================ */
-function saveLocal(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {}
-}
-function loadLocal(key) {
-  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : null; } catch (e) { return null; }
+/**
+ * Проверяет, не «протухла» ли текущая сессия:
+ * если менеджер сменил логин/пароль — sessionVersion увеличится
+ * и пользователь будет принудительно разлогинен.
+ */
+function revalidateCurrentSession() {
+  if (!state.currentUser) return;
+  const me = state.accounts.find(a => a.id === state.currentUser.id);
+
+  if (!me) {
+    // аккаунта больше нет
+    forceLogout('Ваш аккаунт был удалён. Обратитесь к менеджеру.');
+    return;
+  }
+
+  if (me.sessionVersion !== state.currentUser.sessionVersion) {
+    forceLogout('Данные вашего аккаунта изменены менеджером. Войдите заново.');
+    return;
+  }
+
+  // обновляем кэш текущего пользователя (имя/логин могли поменять)
+  const merged = { ...state.currentUser, name: me.name, username: me.username };
+  state.currentUser = merged;
+  saveSession(merged);
+  updateUserChip();
+  updateDrawerProfile();
+  state.validatedSession = true;
 }
 
-/* ================================================
-   SESSION
-================================================ */
-function saveSession(user) {
-  saveLocal(SESSION_KEY, user);
-}
-function loadSession() {
-  return loadLocal(SESSION_KEY);
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+function forceLogout(message) {
+  clearSession();
+  state.currentUser = null;
+  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+    const el = $(id); if (el) el.style.display = 'none';
+  });
+  document.querySelectorAll('.modal-overlay.active').forEach(o => o.classList.remove('active'));
+  const drawer = $('drawerOverlay'); if (drawer) drawer.classList.remove('active');
+  const mgr = $('managerOverlay'); if (mgr) { mgr.classList.remove('active'); mgr.style.display = 'none'; }
+  document.body.style.overflow = '';
+  $('authOverlay').style.display = 'flex';
+  $('loginUsername').value = '';
+  $('loginPassword').value = '';
+  $('loginError').textContent = message || '';
 }
 
-/* ================================================
-   ACTION LOGS
-================================================ */
-const LOG_TYPES = {
-  login:    { icon: '🔑', label: 'Вход в систему' },
-  logout:   { icon: '🚪', label: 'Выход из системы' },
-  register: { icon: '👤', label: 'Регистрация' },
-  add:      { icon: '➕', label: 'Добавление товара' },
-  edit:     { icon: '✏️', label: 'Редактирование товара' },
-  delete:   { icon: '🗑️', label: 'Удаление товара' },
-  addUser:  { icon: '👥', label: 'Добавление пользователя' },
-  delUser:  { icon: '❌', label: 'Удаление пользователя' },
-};
+/* ===========================================================
+   FIREBASE WRITE
+=========================================================== */
+async function fbSaveProduct(product) {
+  try { await set(ref(db, `products/${product.id}`), product); }
+  catch (e) { console.error('Save product error:', e); showToast('⚠ Ошибка синхронизации', 'error'); }
+}
+async function fbDeleteProduct(id) {
+  try { await remove(ref(db, `products/${id}`)); }
+  catch (e) { console.error('Delete product error:', e); showToast('⚠ Ошибка удаления', 'error'); }
+}
+async function fbUpdateAccount(id, patch) {
+  try { await update(ref(db, `accounts/${id}`), patch); }
+  catch (e) { console.error('Update account error:', e); showToast('⚠ Ошибка сохранения', 'error'); }
+}
+async function fbClearLogs() {
+  try { await remove(LOGS_REF); }
+  catch (e) { console.error('Clear logs error:', e); }
+}
 
 async function writeLog(type, details = '') {
   if (!state.currentUser) return;
@@ -168,476 +401,32 @@ async function writeLog(type, details = '') {
     type,
     userId:   state.currentUser.id,
     userName: state.currentUser.name || state.currentUser.username,
+    role:     state.currentUser.role,
+    branch:   state.currentUser.branch || null,
     details,
     ts:       Date.now(),
   };
   try {
     await set(ref(db, `logs/${entry.id}`), entry);
-  } catch (e) {
-    // оффлайн — сохраняем локально
+  } catch (_) {
     state.logs.unshift(entry);
-    saveLocal(LOGS_CACHE_KEY, state.logs);
+    saveLocal(LOGS_CACHE, state.logs);
   }
 }
 
-/* ================================================
-   FIREBASE LISTENERS
-================================================ */
-function initFirebaseListeners() {
-  showSyncIndicator('connecting');
-
-  // Products
-  onValue(PRODUCTS_REF, (snap) => {
-    const data = snap.val();
-    if (data) {
-      state.products = Object.values(data);
-    } else if (!state.firebaseLoaded) {
-      const cached = loadLocal(STORAGE_KEY);
-      state.products = (cached && cached.length > 0) ? cached : getDefaultProducts();
-      state.products.forEach(p => fbSaveProduct(p));
-    } else {
-      state.products = [];
-    }
-    state.firebaseLoaded = true;
-    saveLocal(STORAGE_KEY, state.products);
-    renderAll();
-    showSyncIndicator('ok');
-  }, (err) => {
-    console.error('Firebase products error:', err);
-    showSyncIndicator('error');
-    if (!state.firebaseLoaded) {
-      state.products = loadLocal(STORAGE_KEY) || getDefaultProducts();
-      state.firebaseLoaded = true;
-      renderAll();
-    }
-    showToast('⚠ Нет связи — работаем офлайн', 'error');
-  });
-
-  // Users — список пользователей нужен только менеджерам
-  if (state.currentUser && state.currentUser.role !== 'staff') {
-    onValue(USERS_REF, (snap) => {
-      const data = snap.val();
-      state.users = data ? Object.values(data) : [];
-      saveLocal(USERS_CACHE_KEY, state.users);
-      renderManagerUsers();
-    }, () => {
-      state.users = loadLocal(USERS_CACHE_KEY) || [];
-      renderManagerUsers();
-    });
-  }
-
-  // Logs — только менеджеры видят журнал действий
-  if (state.currentUser && state.currentUser.role !== 'staff') {
-    onValue(LOGS_REF, (snap) => {
-      const data = snap.val();
-      state.logs = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
-      saveLocal(LOGS_CACHE_KEY, state.logs);
-      renderManagerLogs();
-    }, () => {
-      state.logs = loadLocal(LOGS_CACHE_KEY) || [];
-      renderManagerLogs();
-    });
-  } else {
-    // Сотрудники не загружают журнал
-    state.logs = [];
-  }
-}
-
-/* ================================================
-   FIREBASE CRUD
-================================================ */
-async function fbSaveProduct(product) {
-  try { await set(ref(db, `products/${product.id}`), product); }
-  catch (e) { console.error('Save error:', e); showToast('⚠ Ошибка синхронизации', 'error'); }
-}
-
-async function fbDeleteProduct(id) {
-  try { await remove(ref(db, `products/${id}`)); }
-  catch (e) { console.error('Delete error:', e); showToast('⚠ Ошибка удаления', 'error'); }
-}
-
-async function fbSaveUser(user) {
-  try { await set(ref(db, `users/${user.id}`), user); }
-  catch (e) { console.error('User save error:', e); }
-}
-
-async function fbDeleteUser(userId) {
-  try { await remove(ref(db, `users/${userId}`)); }
-  catch (e) { console.error('User delete error:', e); }
-}
-
-async function fbClearLogs() {
-  try { await remove(LOGS_REF); }
-  catch (e) { console.error('Clear logs error:', e); }
-}
-
-/* ================================================
+/* ===========================================================
    SYNC INDICATOR
-================================================ */
+=========================================================== */
 function showSyncIndicator(status) {
-  const el = document.getElementById('syncIndicator');
-  if (el) {
-    const map = {
-      connecting: { text: '⏳ Подключение...',  cls: 'sync--connecting' },
-      ok:         { text: '☁ Синхронизировано', cls: 'sync--ok'         },
-      error:      { text: '⚠ Офлайн',           cls: 'sync--error'      },
-    };
-    const s = map[status] || map.ok;
-    el.textContent = s.text;
-    el.className   = `sync-indicator ${s.cls}`;
-  }
-  // Обновляем drawer sync (если он есть)
-  if (typeof updateDrawerSync === 'function') updateDrawerSync(status);
-}
-
-/* ================================================
-   DEMO DATA
-================================================ */
-function getDefaultProducts() {
-  return [
-    { id: uid(), name: 'Pepsi 0.5л',                category: 'drinks',     unit: 'шт',     description: 'Газированный напиток Pepsi, бутылка 0.5 литра', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  } },
-    { id: uid(), name: 'Coca-Cola 1л',               category: 'drinks',     unit: 'шт',     description: 'Классическая Кока-Кола, бутылка 1 литр',         photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 } },
-    { id: uid(), name: 'Пластиковые стаканы 250мл',  category: 'disposable', unit: 'уп',     description: 'Одноразовые стаканы, упаковка 100 штук',          photo: null, branches: { branch1: 5,  branch2: 2,  branch3: 0  } },
-    { id: uid(), name: 'Трубочки для коктейлей',     category: 'disposable', unit: 'уп',     description: 'Пластиковые трубочки, упаковка 500 штук',         photo: null, branches: { branch1: 3,  branch2: 0,  branch3: 1  } },
-    { id: uid(), name: 'Сахар 1кг',                  category: 'food',       unit: 'кг',     description: 'Сахар-песок, пакет 1кг',                          photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  } },
-    { id: uid(), name: 'Fairy 500мл',                category: 'cleaning',   unit: 'шт',     description: 'Средство для мытья посуды Fairy, 500мл',          photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  } },
-  ];
-}
-
-/* ================================================
-   DOM SHORTCUTS
-================================================ */
-const $ = id => document.getElementById(id);
-
-/* ================================================
-   AUTH SYSTEM
-================================================ */
-function showAuthScreen(screenId) {
-  ['authChoose', 'authLogin', 'authRegister'].forEach(id => {
-    const el = $(id);
-    if (el) el.style.display = id === screenId ? 'block' : 'none';
-  });
-  // Сброс ошибок
-  const err1 = $('loginError'), err2 = $('regError');
-  if (err1) err1.textContent = '';
-  if (err2) err2.textContent = '';
-}
-
-function initAuth() {
-  // Попытка восстановить сессию
-  const session = loadSession();
-  if (session && session.id) {
-    // Проверяем что пользователь существует в кэше
-    const users = loadLocal(USERS_CACHE_KEY) || [];
-    const exists = users.find(u => u.id === session.id);
-    if (exists) {
-      state.currentUser = exists;
-      hideAuth();
-      return;
-    }
-  }
-
-  showAuthScreen('authChoose');
-  $('authOverlay').style.display = 'flex';
-
-  // Кнопки выбора
-  $('goLoginBtn').addEventListener('click', () => showAuthScreen('authLogin'));
-  $('goRegisterBtn').addEventListener('click', () => showAuthScreen('authRegister'));
-  $('backFromLogin').addEventListener('click', () => showAuthScreen('authChoose'));
-  $('backFromRegister').addEventListener('click', () => showAuthScreen('authChoose'));
-
-  // Показать/скрыть пароль
-  $('loginEye').addEventListener('click', () => {
-    const inp = $('loginPassword');
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-  });
-  $('regEye').addEventListener('click', () => {
-    const inp = $('regPassword');
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-  });
-
-  // Вход
-  $('loginSubmitBtn').addEventListener('click', handleLogin);
-  $('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-
-  // Регистрация
-  $('regSubmitBtn').addEventListener('click', handleRegister);
-  $('regPassword').addEventListener('keydown', e => { if (e.key === 'Enter') handleRegister(); });
-}
-
-async function handleLogin() {
-  const username = $('loginUsername').value.trim();
-  const password = $('loginPassword').value;
-  const errEl    = $('loginError');
-
-  if (!username || !password) {
-    errEl.textContent = 'Заполните все поля';
-    return;
-  }
-
-  // Грузим пользователей из Firebase или кэша
-  let users = [];
-  try {
-    const snap = await get(USERS_REF);
-    users = snap.val() ? Object.values(snap.val()) : (loadLocal(USERS_CACHE_KEY) || []);
-  } catch (e) {
-    users = loadLocal(USERS_CACHE_KEY) || [];
-  }
-
-  const hashed = hashPassword(password);
-  const user = users.find(u => u.username === username && u.passwordHash === hashed);
-
-  if (!user) {
-    errEl.textContent = 'Неверный логин или пароль';
-    errEl.style.animation = 'none';
-    requestAnimationFrame(() => { errEl.style.animation = 'shake 0.3s ease'; });
-    return;
-  }
-
-  state.currentUser = user;
-  saveSession(user);
-  await writeLog('login', `Вход с логином: ${username}`);
-  hideAuth();
-  showToast(`👋 Добро пожаловать, ${user.name || user.username}!`, 'success');
-}
-
-async function handleRegister() {
-  const name     = $('regName').value.trim();
-  const username = $('regUsername').value.trim();
-  const password = $('regPassword').value;
-  const errEl    = $('regError');
-
-  if (!name || !username || !password) {
-    errEl.textContent = 'Заполните все поля';
-    return;
-  }
-  if (username.length < 3) {
-    errEl.textContent = 'Логин минимум 3 символа';
-    return;
-  }
-  if (password.length < 4) {
-    errEl.textContent = 'Пароль минимум 4 символа';
-    return;
-  }
-
-  // Проверяем уникальность логина
-  let users = [];
-  try {
-    const snap = await get(USERS_REF);
-    users = snap.val() ? Object.values(snap.val()) : (loadLocal(USERS_CACHE_KEY) || []);
-  } catch (e) {
-    users = loadLocal(USERS_CACHE_KEY) || [];
-  }
-
-  if (users.find(u => u.username === username)) {
-    errEl.textContent = 'Такой логин уже занят';
-    return;
-  }
-
-  // Первый пользователь становится менеджером
-  const isFirst = users.length === 0;
-
-  const newUser = {
-    id:           uid(),
-    name,
-    username,
-    passwordHash: hashPassword(password),
-    role:         isFirst ? 'manager' : 'staff',
-    createdAt:    Date.now(),
+  const el = $('syncIndicator');
+  const map = {
+    connecting: { text: '⏳ Подключение...',  cls: 'sync--connecting' },
+    ok:         { text: '☁ Синхронизировано', cls: 'sync--ok'         },
+    error:      { text: '⚠ Офлайн',           cls: 'sync--error'      },
   };
-
-  await fbSaveUser(newUser);
-
-  state.currentUser = newUser;
-  saveSession(newUser);
-
-  // Записываем лог — временно ставим пользователя
-  await writeLog('register', `Зарегистрировался: ${username}`);
-
-  hideAuth();
-  showToast(`✓ Аккаунт создан! Добро пожаловать, ${name}!`, 'success');
-
-  if (isFirst) {
-    setTimeout(() => showToast('🏆 Вы первый — вам выдана роль Менеджера', 'success'), 2000);
-  }
-}
-
-function hideAuth() {
-  const overlay = $('authOverlay');
-  if (overlay) overlay.style.display = 'none';
-
-  // Показываем основной интерфейс
-  const toShow = ['mainHeader', 'mainToolbar', 'mainContent'];
-  toShow.forEach(id => {
-    const el = $(id);
-    if (el) el.style.display = '';
-  });
-
-  // Обновляем юзер-чип
-  updateUserChip();
-
-  // Показываем кнопку менеджера для менеджеров
-  const managerBtn = $('managerPanelBtn');
-  if (managerBtn) {
-    managerBtn.style.display = state.currentUser && state.currentUser.role !== 'staff' ? 'flex' : 'none';
-  }
-
-  // Инициализируем Firebase только после авторизации
-  initFirebaseListeners();
-  initBranchNav();
-  initFilters();
-  initPhotoUpload();
-  initSteppers();
-  initProductEventListeners();
-  initManagerPanel();
-  initUserChip();
-  initMobileUI();
-}
-
-function updateUserChip() {
-  if (!state.currentUser) return;
-  const u = state.currentUser;
-  const initial = (u.name || u.username || '?')[0].toUpperCase();
-  const nameEl = $('userChipName');
-  const avatarEl = $('userAvatar');
-  const dropName = $('dropdownName');
-  const dropRole = $('dropdownRole');
-  if (nameEl)   nameEl.textContent = u.name || u.username;
-  if (avatarEl) avatarEl.textContent = initial;
-  if (dropName) dropName.textContent = u.name || u.username;
-  if (dropRole) dropRole.textContent = ROLE_LABELS[u.role] || u.role;
-}
-
-function initUserChip() {
-  const chip = $('userChip');
-  if (!chip) return;
-
-  chip.addEventListener('click', (e) => {
-    e.stopPropagation();
-    chip.classList.toggle('open');
-  });
-
-  document.addEventListener('click', () => chip.classList.remove('open'));
-
-  $('logoutBtn').addEventListener('click', () => {
-    chip.classList.remove('open');
-    handleLogout();
-  });
-}
-
-async function handleLogout() {
-  await writeLog('logout', 'Выход из системы');
-  clearSession();
-  state.currentUser = null;
-  // Скрываем интерфейс
-  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
-    const el = $(id);
-    if (el) el.style.display = 'none';
-  });
-  // Закрываем drawer если открыт
-  const drawer = $('drawerOverlay');
-  if (drawer) drawer.classList.remove('active');
-  $('authOverlay').style.display = 'flex';
-  showAuthScreen('authChoose');
-  showToast('👋 Вы вышли из системы');
-}
-
-/* ================================================
-   MOBILE UI (Drawer + Branch Modal)
-================================================ */
-function initMobileUI() {
-  initDrawer();
-  initBranchModal();
-  updateBranchIndicator();
-  updateDrawerProfile();
-  updateDrawerSync('connecting');
-}
-
-function initDrawer() {
-  const burgerBtn      = $('burgerBtn');
-  const drawerOverlay  = $('drawerOverlay');
-  const drawerCloseBtn = $('drawerCloseBtn');
-  if (!burgerBtn || !drawerOverlay) return;
-
-  const openDrawer = () => {
-    updateDrawerProfile();
-    drawerOverlay.classList.add('active');
-    document.body.style.overflow = 'hidden';
-  };
-  const closeDrawer = () => {
-    drawerOverlay.classList.remove('active');
-    document.body.style.overflow = '';
-  };
-
-  burgerBtn.addEventListener('click', openDrawer);
-  drawerCloseBtn.addEventListener('click', closeDrawer);
-  drawerOverlay.addEventListener('click', e => {
-    if (e.target === drawerOverlay) closeDrawer();
-  });
-
-  // Кнопка "Филиал" в drawer — открывает модалку выбора
-  $('drawerBranchBtn').addEventListener('click', () => {
-    closeDrawer();
-    setTimeout(() => openBranchModal(), 220);
-  });
-
-  // Кнопка "Добавить товар" в drawer
-  $('drawerAddBtn').addEventListener('click', () => {
-    closeDrawer();
-    setTimeout(() => openEditModal(null), 220);
-  });
-
-  // Кнопка "Печать" в drawer
-  $('drawerPrintBtn').addEventListener('click', () => {
-    closeDrawer();
-    setTimeout(() => preparePrint(), 220);
-  });
-
-  // Кнопка "Менеджер" в drawer (только для менеджеров)
-  $('drawerManagerBtn').addEventListener('click', () => {
-    closeDrawer();
-    setTimeout(() => {
-      const managerOverlay = $('managerOverlay');
-      if (!managerOverlay) return;
-      managerOverlay.style.display = 'flex';
-      requestAnimationFrame(() => managerOverlay.classList.add('active'));
-      renderManagerUsers();
-      renderManagerLogs();
-    }, 220);
-  });
-  // Показываем кнопку менеджера если пользователь — менеджер
-  if (state.currentUser && state.currentUser.role !== 'staff') {
-    $('drawerManagerBtn').style.display = 'flex';
-  }
-
-  // Выход
-  $('drawerLogoutBtn').addEventListener('click', () => {
-    closeDrawer();
-    setTimeout(() => handleLogout(), 220);
-  });
-
-  // Индикатор филиала под шапкой — открывает модалку выбора
-  const branchIndicator = $('branchIndicator');
-  if (branchIndicator) {
-    branchIndicator.addEventListener('click', openBranchModal);
-  }
-
-  // Закрытие drawer по ESC
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && drawerOverlay.classList.contains('active')) closeDrawer();
-  });
-}
-
-function updateDrawerProfile() {
-  if (!state.currentUser) return;
-  const u = state.currentUser;
-  const initial = (u.name || u.username || '?')[0].toUpperCase();
-  const av = $('drawerAvatar');
-  const nm = $('drawerName');
-  const rl = $('drawerRole');
-  if (av) av.textContent = initial;
-  if (nm) nm.textContent = u.name || u.username;
-  if (rl) rl.textContent = ROLE_LABELS[u.role] || u.role;
+  const s = map[status] || map.ok;
+  if (el) { el.textContent = s.text; el.className = `sync-indicator ${s.cls}`; }
+  updateDrawerSync(status);
 }
 
 function updateDrawerSync(status) {
@@ -645,7 +434,7 @@ function updateDrawerSync(status) {
   const txt = $('drawerSyncText');
   if (!dot || !txt) return;
   const map = {
-    connecting: { text: 'Подключение...',  cls: 'connecting' },
+    connecting: { text: 'Подключение...',   cls: 'connecting' },
     ok:         { text: 'Синхронизировано', cls: '' },
     error:      { text: 'Офлайн режим',     cls: 'error' },
   };
@@ -654,108 +443,332 @@ function updateDrawerSync(status) {
   txt.textContent = s.text;
 }
 
-function initBranchModal() {
-  const modal      = $('branchModal');
-  const closeBtn   = $('branchModalClose');
-  if (!modal) return;
-
-  closeBtn.addEventListener('click', () => closeOverlay(modal));
-  modal.addEventListener('click', e => {
-    if (e.target === modal) closeOverlay(modal);
+/* ===========================================================
+   AUTH
+=========================================================== */
+function initAuth() {
+  $('loginEye').addEventListener('click', () => {
+    const inp = $('loginPassword');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
   });
 
-  // Клик по любому филиалу в модалке
+  $('loginSubmitBtn').addEventListener('click', handleLogin);
+  $('loginPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') handleLogin();
+  });
+  $('loginUsername').addEventListener('keydown', e => {
+    if (e.key === 'Enter') $('loginPassword').focus();
+  });
+
+  // Восстановление сессии (оптимистично: показываем UI,
+  // а Firebase-листенер потом проверит sessionVersion)
+  const session = loadSession();
+  if (session && session.id) {
+    state.currentUser = session;
+    enterApp(/*fromSession*/true);
+    return;
+  }
+
+  $('authOverlay').style.display = 'flex';
+  setTimeout(() => $('loginUsername').focus(), 200);
+
+  // Гарантируем что в Firebase лежат дефолтные аккаунты
+  // (Это безопасно: если они уже есть — не перезатрутся.)
+  bootstrapAccountsIfMissing().catch(() => {});
+  bootstrapProductsIfMissing().catch(() => {});
+}
+
+async function handleLogin() {
+  const username = $('loginUsername').value.trim();
+  const password = $('loginPassword').value;
+  const errEl    = $('loginError');
+
+  if (!username || !password) {
+    showLoginError('Заполните логин и пароль');
+    return;
+  }
+
+  // Получаем аккаунты (свежие с сервера)
+  let accounts = [];
+  try {
+    await bootstrapAccountsIfMissing();
+    const snap = await get(ACCOUNTS_REF);
+    accounts = snap.val() ? Object.values(snap.val()) : [];
+  } catch (_) {
+    accounts = loadLocal(ACCOUNTS_CACHE) || [];
+  }
+
+  if (!accounts.length) {
+    accounts = getDefaultAccounts();
+  }
+
+  const hashed = hashPassword(password);
+  const acc = accounts.find(a =>
+    a.username.toLowerCase() === username.toLowerCase() &&
+    a.passwordHash === hashed
+  );
+
+  if (!acc) {
+    showLoginError('Неверный логин или пароль');
+    return;
+  }
+
+  state.currentUser = {
+    id:             acc.id,
+    role:           acc.role,
+    branch:         acc.branch,
+    name:           acc.name,
+    username:       acc.username,
+    sessionVersion: acc.sessionVersion || 1,
+  };
+  saveSession(state.currentUser);
+  errEl.textContent = '';
+  enterApp(false);
+  await writeLog('login', `${ROLE_LABELS[acc.role]}: ${acc.username}`);
+  showToast(`👋 Добро пожаловать, ${acc.name}!`, 'success');
+}
+
+function showLoginError(message) {
+  const errEl = $('loginError');
+  errEl.textContent = message;
+  errEl.style.animation = 'none';
+  requestAnimationFrame(() => { errEl.style.animation = 'shake 0.3s ease'; });
+}
+
+function enterApp() {
+  $('authOverlay').style.display = 'none';
+  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+    const el = $(id); if (el) el.style.display = '';
+  });
+
+  // Активный филиал зависит от роли
+  if (isStaff()) {
+    state.activeBranch = userBranch();
+  } else {
+    state.activeBranch = 'all';
+  }
+
+  applyRoleVisibility();
+  updateUserChip();
+
+  // Навешиваем все обработчики ОДИН РАЗ
+  if (!enterApp._initialized) {
+    initBranchNav();
+    initFilters();
+    initFilterModal();
+    initPhotoUpload();
+    initSteppers();
+    initProductEvents();
+    initManagerPanel();
+    initUserChip();
+    initMobileUI();
+    enterApp._initialized = true;
+  }
+
+  // Подписки на Firebase — каждый раз свежие, чтобы переключение
+  // ролей корректно подключало/отключало логи
+  initFirebaseListeners();
+  updateDrawerProfile();
+  updateBranchIndicator();
+}
+
+async function handleLogout() {
+  await writeLog('logout', '');
+  clearSession();
+  state.currentUser = null;
+  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+    const el = $(id); if (el) el.style.display = 'none';
+  });
+  $('drawerOverlay').classList.remove('active');
+  const mgr = $('managerOverlay');
+  mgr.classList.remove('active'); mgr.style.display = 'none';
+  document.body.style.overflow = '';
+  $('authOverlay').style.display = 'flex';
+  $('loginUsername').value = '';
+  $('loginPassword').value = '';
+  $('loginError').textContent = '';
+  showToast('👋 Вы вышли из системы');
+  setTimeout(() => $('loginUsername').focus(), 200);
+}
+
+/* ===========================================================
+   ВИДИМОСТЬ ПО РОЛИ
+=========================================================== */
+function applyRoleVisibility() {
+  const manager = isManager();
+
+  // Заголовок: кнопки добавления товаров и панели менеджера
+  $('addProductBtn').style.display      = manager ? '' : 'none';
+  $('managerPanelBtn').style.display    = manager ? '' : 'none';
+  $('drawerAddBtn').style.display       = manager ? '' : 'none';
+  $('drawerManagerBtn').style.display   = manager ? '' : 'none';
+
+  // Переключение филиалов: только менеджер
+  $('branches').style.display           = manager ? '' : 'none';
+  $('drawerBranchBtn').style.display    = manager ? '' : 'none';
+  $('branchIndicator').style.display    = manager ? '' : 'none';
+
+  // У staff фиксируем активный филиал
+  if (!manager) {
+    document.querySelectorAll('.branches .branch-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.branch === userBranch());
+    });
+  }
+
+  document.body.classList.toggle('role-manager', manager);
+  document.body.classList.toggle('role-staff', !manager);
+}
+
+/* ===========================================================
+   USER CHIP
+=========================================================== */
+function updateUserChip() {
+  if (!state.currentUser) return;
+  const u = state.currentUser;
+  const initial = (u.name || u.username || '?')[0].toUpperCase();
+  $('userChipName').textContent = u.name || u.username;
+  $('userAvatar').textContent   = initial;
+  $('dropdownName').textContent = u.name || u.username;
+  $('dropdownRole').textContent = ROLE_LABELS[u.role] || u.role;
+}
+
+function initUserChip() {
+  const chip = $('userChip');
+  chip.addEventListener('click', e => { e.stopPropagation(); chip.classList.toggle('open'); });
+  document.addEventListener('click', () => chip.classList.remove('open'));
+  $('logoutBtn').addEventListener('click', () => { chip.classList.remove('open'); handleLogout(); });
+}
+
+/* ===========================================================
+   MOBILE UI: Drawer + branch modal
+=========================================================== */
+function initMobileUI() {
+  initDrawer();
+  initBranchModal();
+}
+
+function initDrawer() {
+  const overlay = $('drawerOverlay');
+  const closeBtn = $('drawerCloseBtn');
+
+  const open = () => {
+    updateDrawerProfile();
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  };
+  const close = () => {
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+  };
+
+  $('burgerBtn').addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+
+  $('drawerBranchBtn').addEventListener('click', () => { close(); setTimeout(openBranchModal, 200); });
+  $('drawerAddBtn').addEventListener('click',    () => { close(); setTimeout(() => openEditModal(null), 200); });
+  $('drawerPrintBtn').addEventListener('click',  () => { close(); setTimeout(preparePrint, 200); });
+  $('drawerManagerBtn').addEventListener('click',() => { close(); setTimeout(openManagerPanel, 200); });
+  $('drawerLogoutBtn').addEventListener('click', () => { close(); setTimeout(handleLogout, 200); });
+
+  $('branchIndicator').addEventListener('click', () => { if (isManager()) openBranchModal(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && overlay.classList.contains('active')) close();
+  });
+}
+
+function updateDrawerProfile() {
+  if (!state.currentUser) return;
+  const u = state.currentUser;
+  const initial = (u.name || u.username || '?')[0].toUpperCase();
+  $('drawerAvatar').textContent = initial;
+  $('drawerName').textContent   = u.name || u.username;
+  $('drawerRole').textContent   = ROLE_LABELS[u.role] || u.role;
+}
+
+function initBranchModal() {
+  const modal = $('branchModal');
+  $('branchModalClose').addEventListener('click', () => closeOverlay(modal));
+  modal.addEventListener('click', e => { if (e.target === modal) closeOverlay(modal); });
+
   modal.querySelectorAll('.branch-option').forEach(opt => {
     opt.addEventListener('click', () => {
       const branch = opt.dataset.branch;
-      // Снимаем active со всех
       modal.querySelectorAll('.branch-option').forEach(o => o.classList.remove('active'));
       opt.classList.add('active');
-      // Применяем
       state.activeBranch = branch;
-      // Синхронизируем десктопные кнопки филиалов
       document.querySelectorAll('.branches .branch-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.branch === branch);
       });
       updateBranchIndicator();
       renderAll();
-      // Закрываем с небольшой задержкой для красивой анимации
       setTimeout(() => closeOverlay(modal), 180);
     });
   });
 }
 
 function openBranchModal() {
+  if (!isManager()) return;
   const modal = $('branchModal');
-  if (!modal) return;
-  // Подсвечиваем активный филиал
   modal.querySelectorAll('.branch-option').forEach(o => {
     o.classList.toggle('active', o.dataset.branch === state.activeBranch);
   });
-  // Обновляем статистику по каждому филиалу
   updateBranchModalStats();
   openOverlay(modal);
 }
 
 function updateBranchModalStats() {
-  const totalAll = state.products.length;
   const elAll = $('branchStatAll');
   if (elAll) {
-    const allItems = state.products.reduce((s, p) => s + getQty(p), 0);
-    elAll.textContent = `${totalAll} наименований • ${allItems} ед.`;
+    const total = state.products.reduce((s, p) => s + getQty(p), 0);
+    elAll.textContent = `${state.products.length} наименований • ${total} шт`;
   }
   BRANCH_KEYS.forEach((k, i) => {
     const el = $(`branchStat${i + 1}`);
     if (!el) return;
-    const items = state.products.reduce((s, p) => s + (p.branches[k] ?? 0), 0);
-    const lowCount = state.products.filter(p => {
-      const q = p.branches[k] ?? 0;
-      return q > 0 && q <= 5;
-    }).length;
-    const outCount = state.products.filter(p => (p.branches[k] ?? 0) === 0).length;
+    const items   = state.products.reduce((s, p) => s + (p.branches?.[k] ?? 0), 0);
+    const lowCnt  = state.products.filter(p => { const q = p.branches?.[k] ?? 0; return q > 0 && q <= 5; }).length;
+    const outCnt  = state.products.filter(p => (p.branches?.[k] ?? 0) === 0).length;
     let extra = '';
-    if (outCount > 0) extra = ` • ⚠ ${outCount} нет`;
-    else if (lowCount > 0) extra = ` • ⚠ ${lowCount} мало`;
-    el.textContent = `${items} ед.${extra}`;
+    if (outCnt > 0)        extra = ` • ⚠ ${outCnt} нет`;
+    else if (lowCnt > 0)   extra = ` • ⚠ ${lowCnt} мало`;
+    el.textContent = `${items} шт${extra}`;
   });
 }
 
 function updateBranchIndicator() {
-  const indicator = $('branchIndicatorValue');
-  if (!indicator) return;
-  const label = state.activeBranch === 'all' ? 'Все филиалы' : (BRANCH_LABELS[state.activeBranch] || state.activeBranch);
-  indicator.textContent = label;
-
-  const drawerSub = $('drawerBranchSub');
-  if (drawerSub) drawerSub.textContent = label;
+  const label = state.activeBranch === 'all'
+    ? 'Все филиалы'
+    : (BRANCH_LABELS[state.activeBranch] || state.activeBranch);
+  $('branchIndicatorValue').textContent = label;
+  const sub = $('drawerBranchSub'); if (sub) sub.textContent = label;
 }
 
-/* ================================================
+function initBranchNav() {
+  const branches = $('branches');
+  branches.querySelectorAll('.branch-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!isManager()) return;
+      branches.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.activeBranch = btn.dataset.branch;
+      updateBranchIndicator();
+      renderAll();
+    });
+  });
+}
+
+/* ===========================================================
    MANAGER PANEL
-================================================ */
+=========================================================== */
 function initManagerPanel() {
-  // Только для менеджеров и админов
-  if (!state.currentUser || state.currentUser.role === 'staff') return;
-
-  const managerBtn     = $('managerPanelBtn');
-  const managerOverlay = $('managerOverlay');
-  const closeBtn       = $('managerCloseBtn');
-
-  if (!managerBtn || !managerOverlay) return;
-
-  managerBtn.addEventListener('click', () => {
-    managerOverlay.style.display = 'flex';
-    requestAnimationFrame(() => managerOverlay.classList.add('active'));
-    renderManagerUsers();
-    renderManagerLogs();
+  $('managerPanelBtn').addEventListener('click', openManagerPanel);
+  $('managerCloseBtn').addEventListener('click', closeManagerPanel);
+  $('managerOverlay').addEventListener('click', e => {
+    if (e.target === $('managerOverlay')) closeManagerPanel();
   });
 
-  closeBtn.addEventListener('click', closeManagerPanel);
-  managerOverlay.addEventListener('click', e => {
-    if (e.target === managerOverlay) closeManagerPanel();
-  });
-
-  // Табы
   document.querySelectorAll('.manager-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.manager-tab').forEach(t => t.classList.remove('active'));
@@ -766,22 +779,6 @@ function initManagerPanel() {
     });
   });
 
-  // Добавить пользователя
-  $('managerAddUserBtn').addEventListener('click', () => {
-    $('maName').value = $('maUsername').value = $('maPassword').value = '';
-    $('maRole').value = 'staff';
-    $('maError').textContent = '';
-    openOverlay($('managerAddModal'));
-  });
-
-  $('managerAddModalClose').addEventListener('click', () => closeOverlay($('managerAddModal')));
-  $('managerAddModal').addEventListener('click', e => {
-    if (e.target === $('managerAddModal')) closeOverlay($('managerAddModal'));
-  });
-
-  $('maSubmitBtn').addEventListener('click', handleManagerAddUser);
-
-  // Очистить логи
   $('clearLogsBtn').addEventListener('click', async () => {
     await fbClearLogs();
     state.logs = [];
@@ -789,21 +786,25 @@ function initManagerPanel() {
     showToast('✓ Журнал очищен');
   });
 
-  // Удаление пользователя
-  $('confirmUserCancelBtn').addEventListener('click', () => {
-    closeOverlay($('confirmUserModal'));
-    state.pendingDeleteUserId = null;
+  // User edit modal
+  $('userEditClose').addEventListener('click', () => closeOverlay($('userEditModal')));
+  $('userEditModal').addEventListener('click', e => {
+    if (e.target === $('userEditModal')) closeOverlay($('userEditModal'));
   });
-  $('confirmUserDeleteBtn').addEventListener('click', async () => {
-    if (state.pendingDeleteUserId) {
-      const user = state.users.find(u => u.id === state.pendingDeleteUserId);
-      await fbDeleteUser(state.pendingDeleteUserId);
-      await writeLog('delUser', `Удалён пользователь: ${user ? user.username : state.pendingDeleteUserId}`);
-      state.pendingDeleteUserId = null;
-      closeOverlay($('confirmUserModal'));
-      showToast('✓ Пользователь удалён');
-    }
+  $('ueEye').addEventListener('click', () => {
+    const inp = $('uePassword');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
   });
+  $('ueSubmitBtn').addEventListener('click', handleUserEditSubmit);
+}
+
+function openManagerPanel() {
+  if (!isManager()) return;
+  const overlay = $('managerOverlay');
+  overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('active'));
+  renderManagerUsers();
+  renderManagerLogs();
 }
 
 function closeManagerPanel() {
@@ -812,77 +813,127 @@ function closeManagerPanel() {
   setTimeout(() => { overlay.style.display = 'none'; }, 320);
 }
 
-async function handleManagerAddUser() {
-  const name     = $('maName').value.trim();
-  const username = $('maUsername').value.trim();
-  const password = $('maPassword').value;
-  const role     = $('maRole').value;
-  const errEl    = $('maError');
-
-  if (!name || !username || !password) { errEl.textContent = 'Заполните все поля'; return; }
-  if (state.users.find(u => u.username === username)) { errEl.textContent = 'Логин уже занят'; return; }
-
-  const newUser = {
-    id:           uid(),
-    name,
-    username,
-    passwordHash: hashPassword(password),
-    role,
-    createdAt:    Date.now(),
-  };
-
-  await fbSaveUser(newUser);
-  await writeLog('addUser', `Добавлен пользователь: ${username} (${ROLE_LABELS[role]})`);
-  closeOverlay($('managerAddModal'));
-  showToast(`✓ Пользователь ${name} добавлен`);
-}
-
 function renderManagerUsers() {
   const list = $('managerUsersList');
   if (!list) return;
 
-  if (!state.users.length) {
-    list.innerHTML = '<div class="log-empty">Нет пользователей</div>';
+  if (!state.accounts.length) {
+    list.innerHTML = '<div class="log-empty">Загрузка…</div>';
     return;
   }
 
-  list.innerHTML = state.users.map(u => {
-    const initial = (u.name || u.username || '?')[0].toUpperCase();
-    const isMe    = state.currentUser && u.id === state.currentUser.id;
-    const roleClass = `role-${u.role}`;
-    const roleBadgeClass = `role-badge-${u.role === 'admin' ? 'admin' : u.role === 'manager' ? 'manager' : 'staff'}`;
-    const canDelete = !isMe && state.currentUser && state.currentUser.role !== 'staff';
+  // Сортируем: менеджер сверху, потом филиалы по порядку
+  const sorted = [...state.accounts].sort((a, b) => {
+    if (a.role === 'manager') return -1;
+    if (b.role === 'manager') return 1;
+    return BRANCH_KEYS.indexOf(a.branch) - BRANCH_KEYS.indexOf(b.branch);
+  });
 
+  list.innerHTML = sorted.map(acc => {
+    const initial = (acc.name || acc.username || '?')[0].toUpperCase();
+    const isMe    = acc.id === state.currentUser.id;
+    const isMgr   = acc.role === 'manager';
     return `
-      <div class="manager-user-card">
-        <div class="manager-user-avatar ${roleClass}">${escHtml(initial)}</div>
+      <div class="manager-user-card" data-uid="${escHtml(acc.id)}">
+        <div class="manager-user-avatar role-${acc.role}">${escHtml(initial)}</div>
         <div class="manager-user-info">
-          <div class="manager-user-name">${escHtml(u.name || u.username)}${isMe ? ' <span style="font-size:10px;color:var(--accent)">(вы)</span>' : ''}</div>
+          <div class="manager-user-name">
+            ${escHtml(acc.name)}
+            ${isMe ? ' <span class="user-tag-me">(вы)</span>' : ''}
+          </div>
           <div class="manager-user-meta">
-            <span>@${escHtml(u.username)}</span>
-            <span class="manager-user-role ${roleBadgeClass}">${escHtml(ROLE_LABELS[u.role] || u.role)}</span>
+            <span class="user-meta-login">@${escHtml(acc.username)}</span>
+            <span class="manager-user-role role-badge-${isMgr ? 'manager' : 'staff'}">
+              ${isMgr ? '👑 Менеджер' : '🏪 ' + BRANCH_LABELS[acc.branch]}
+            </span>
           </div>
         </div>
-        ${canDelete ? `
-          <button class="manager-user-delete" data-uid="${escHtml(u.id)}" title="Удалить">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            </svg>
-          </button>` : ''}
+        <button class="manager-user-edit" data-uid="${escHtml(acc.id)}" title="Изменить">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
       </div>`;
   }).join('');
 
-  // Слушатели удаления
-  list.querySelectorAll('.manager-user-delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      const user = state.users.find(u => u.id === uid);
-      state.pendingDeleteUserId = uid;
-      $('confirmUserText').textContent = `Удалить аккаунт "${user ? (user.name || user.username) : ''}"? Это нельзя отменить.`;
-      openOverlay($('confirmUserModal'));
-    });
+  list.querySelectorAll('.manager-user-edit').forEach(btn => {
+    btn.addEventListener('click', () => openUserEditModal(btn.dataset.uid));
   });
+}
+
+function openUserEditModal(accId) {
+  const acc = state.accounts.find(a => a.id === accId);
+  if (!acc) return;
+  state.editingUserId = accId;
+  $('userEditTitle').textContent = acc.role === 'manager' ? 'Изменить аккаунт менеджера' : `Аккаунт филиала «${BRANCH_LABELS[acc.branch]}»`;
+  $('userEditSubtitle').textContent = acc.role === 'manager'
+    ? 'Будьте осторожны — это ваш аккаунт.'
+    : 'После сохранения сотрудник будет автоматически разлогинен.';
+  $('ueName').value     = acc.name || '';
+  $('ueUsername').value = acc.username || '';
+  $('uePassword').value = '';
+  $('ueError').textContent = '';
+  openOverlay($('userEditModal'));
+  setTimeout(() => $('ueName').focus(), 200);
+}
+
+async function handleUserEditSubmit() {
+  const accId = state.editingUserId;
+  if (!accId) return;
+  const acc = state.accounts.find(a => a.id === accId);
+  if (!acc) return;
+
+  const name     = $('ueName').value.trim();
+  const username = $('ueUsername').value.trim();
+  const newPass  = $('uePassword').value;
+  const errEl    = $('ueError');
+
+  if (!name)               { errEl.textContent = 'Введите имя'; return; }
+  if (!username)           { errEl.textContent = 'Введите логин'; return; }
+  if (username.length < 3) { errEl.textContent = 'Логин минимум 3 символа'; return; }
+  if (newPass && newPass.length < 4) { errEl.textContent = 'Пароль минимум 4 символа'; return; }
+
+  // Уникальность логина
+  const dup = state.accounts.find(a => a.id !== accId && a.username.toLowerCase() === username.toLowerCase());
+  if (dup) { errEl.textContent = 'Этот логин уже используется'; return; }
+
+  const patch = { name, username };
+  let credentialsChanged = false;
+
+  if (username !== acc.username) credentialsChanged = true;
+  if (newPass) {
+    patch.passwordHash = hashPassword(newPass);
+    credentialsChanged = true;
+  }
+
+  // Если меняем логин или пароль — увеличиваем sessionVersion,
+  // что мгновенно разлогинит всех активных сессий этого аккаунта.
+  if (credentialsChanged) {
+    patch.sessionVersion = (acc.sessionVersion || 1) + 1;
+  }
+
+  await fbUpdateAccount(accId, patch);
+  await writeLog('userEdit', `${acc.name} → ${name}${credentialsChanged ? ' (логин/пароль обновлены)' : ''}`);
+
+  closeOverlay($('userEditModal'));
+  showToast(credentialsChanged
+    ? '✓ Сохранено. Старая сессия закрыта.'
+    : '✓ Сохранено');
+
+  // Если менеджер меняет САМ СЕБЯ и поменял креды — обновим локальную сессию,
+  // чтобы его не выкинуло с собственной страницы.
+  if (accId === state.currentUser.id && credentialsChanged) {
+    const newSession = {
+      ...state.currentUser,
+      name, username,
+      sessionVersion: patch.sessionVersion,
+    };
+    state.currentUser = newSession;
+    saveSession(newSession);
+    updateUserChip();
+    updateDrawerProfile();
+  }
 }
 
 function renderManagerLogs() {
@@ -894,24 +945,28 @@ function renderManagerLogs() {
     return;
   }
 
-  list.innerHTML = state.logs.slice(0, 100).map(log => {
+  list.innerHTML = state.logs.slice(0, 200).map(log => {
     const info = LOG_TYPES[log.type] || { icon: '📌', label: log.type };
-    const cssClass = `log-${log.type === 'add' ? 'add' : log.type === 'edit' ? 'edit' : log.type === 'delete' || log.type === 'delUser' ? 'delete' : log.type === 'login' ? 'login' : log.type === 'logout' ? 'logout' : 'register'}`;
+    const cssClass = ['add','edit','delete','login','logout','qtyEdit','photoEdit','userEdit'].includes(log.type)
+      ? 'log-' + log.type.toLowerCase()
+      : 'log-other';
+    const branchTag = log.branch ? `<span class="log-branch-tag">${BRANCH_LABELS[log.branch] || log.branch}</span>` : '';
     return `
       <div class="log-entry">
         <div class="log-entry__header">
           <div class="log-entry__icon ${cssClass}">${info.icon}</div>
           <span class="log-entry__user">${escHtml(log.userName || 'Неизвестно')}</span>
+          ${branchTag}
           <span class="log-entry__time">${formatDateTime(log.ts)}</span>
         </div>
-        <div class="log-entry__action">${escHtml(info.label)}${log.details ? ': ' + escHtml(log.details) : ''}</div>
+        <div class="log-entry__action">${escHtml(info.label)}${log.details ? ' — ' + escHtml(log.details) : ''}</div>
       </div>`;
   }).join('');
 }
 
-/* ================================================
+/* ===========================================================
    TOAST
-================================================ */
+=========================================================== */
 let toastTimer = null;
 function showToast(message, type = 'default') {
   clearTimeout(toastTimer);
@@ -921,49 +976,31 @@ function showToast(message, type = 'default') {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
 }
 
-/* ================================================
-   FILTERING & SORTING (умный фильтр)
-================================================ */
+/* ===========================================================
+   ПОИСК / ФИЛЬТРАЦИЯ / СОРТИРОВКА
+=========================================================== */
 function parseSmartQuery(raw) {
-  // Возвращает { textPart, qtyOp, qtyValue, stockHint }
-  // qtyOp: 'lte' | 'gte' | 'eq' | null
-  // stockHint: 'low' | 'out' | 'ok' | null
-  const q = raw.toLowerCase().trim();
+  const q = String(raw || '').toLowerCase().trim();
   if (!q) return { textPart: '', qtyOp: null, qtyValue: null, stockHint: null };
 
-  let textPart  = q;
-  let qtyOp     = null;
-  let qtyValue  = null;
   let stockHint = null;
+  if (/\b(мало|маленьк|низк|кончает|заканчив)/.test(q)) stockHint = 'low';
+  if (/\b(нет|нету|закончил|пуст)/.test(q))             stockHint = 'out';
+  if (/\b(в\s*наличии|много|достаточно)/.test(q))       stockHint = 'ok';
 
-  // Ключевые слова статуса
-  if (/\b(мало|малые|маленьк|низк|кончает|заканчив)/.test(q)) stockHint = 'low';
-  if (/\b(нет|нету|закончил|закончились|0\s*шт|пуст)/.test(q)) stockHint = 'out';
-  if (/\b(в\s*наличии|много|достаточно)/.test(q))             stockHint = 'ok';
-
-  // Числовые запросы: "5 шт", "<= 3", "меньше 10", "до 5"
   const lessMatch  = q.match(/(?:меньше|менее|до|<=|<)\s*(\d+)/);
   const moreMatch  = q.match(/(?:больше|более|от|>=|>)\s*(\d+)/);
   const exactMatch = q.match(/(\d+)\s*(?:шт|штук|штука|единиц|ед)\b/);
   const justNumber = !lessMatch && !moreMatch && !exactMatch && q.match(/^(\d+)$/);
 
-  if (lessMatch) {
-    qtyOp = 'lte';
-    qtyValue = parseInt(lessMatch[1]);
-  } else if (moreMatch) {
-    qtyOp = 'gte';
-    qtyValue = parseInt(moreMatch[1]);
-  } else if (exactMatch) {
-    qtyOp = 'eq';
-    qtyValue = parseInt(exactMatch[1]);
-  } else if (justNumber) {
-    qtyOp = 'eq';
-    qtyValue = parseInt(justNumber[1]);
-  }
+  let qtyOp = null, qtyValue = null;
+  if      (lessMatch)  { qtyOp = 'lte'; qtyValue = +lessMatch[1]; }
+  else if (moreMatch)  { qtyOp = 'gte'; qtyValue = +moreMatch[1]; }
+  else if (exactMatch) { qtyOp = 'eq';  qtyValue = +exactMatch[1]; }
+  else if (justNumber) { qtyOp = 'eq';  qtyValue = +justNumber[1]; }
 
-  // Очищаем текстовую часть от служебных слов и чисел, оставляем только название
-  textPart = q
-    .replace(/\b(мало|малые|маленьк\w*|низк\w*|кончает\w*|заканчив\w*)\b/g, '')
+  const textPart = q
+    .replace(/\b(мало|маленьк\w*|низк\w*|кончает\w*|заканчив\w*)\b/g, '')
     .replace(/\b(нет|нету|закончил\w*|пуст\w*)\b/g, '')
     .replace(/\b(в\s*наличии|много|достаточно)\b/g, '')
     .replace(/(?:меньше|менее|до|больше|более|от|<=|<|>=|>)\s*\d+/g, '')
@@ -985,11 +1022,9 @@ function matchesQty(qty, op, value) {
 
 function getFilteredProducts() {
   let list = [...state.products];
-
-  // Парсим умный запрос
+  const branch = state.activeBranch;
   const parsed = parseSmartQuery(state.searchQuery);
 
-  // Текстовый фильтр (по очищенной части запроса)
   if (parsed.textPart) {
     list = list.filter(p =>
       p.name.toLowerCase().includes(parsed.textPart) ||
@@ -997,75 +1032,198 @@ function getFilteredProducts() {
       (CATEGORY_LABELS[p.category] || '').toLowerCase().includes(parsed.textPart)
     );
   }
-
-  // Числовой фильтр из текста ("5 шт", "меньше 10")
   if (parsed.qtyOp && parsed.qtyValue !== null) {
-    list = list.filter(p => matchesQty(getQty(p, state.activeBranch), parsed.qtyOp, parsed.qtyValue));
+    list = list.filter(p => matchesQty(getQty(p, branch), parsed.qtyOp, parsed.qtyValue));
   }
-
-  // Подсказка по статусу из текста ("мало", "нет")
   if (parsed.stockHint) {
-    list = list.filter(p => getStockStatus(getQty(p, state.activeBranch)) === parsed.stockHint);
+    list = list.filter(p => getStockStatus(getQty(p, branch)) === parsed.stockHint);
   }
-
-  // Категория
-  if (state.categoryFilter !== 'all') list = list.filter(p => p.category === state.categoryFilter);
-
-  // Быстрый фильтр по статусу запасов
+  if (state.categoryFilter !== 'all') {
+    list = list.filter(p => p.category === state.categoryFilter);
+  }
   if (state.stockFilter !== 'all') {
-    list = list.filter(p => getStockStatus(getQty(p, state.activeBranch)) === state.stockFilter);
+    list = list.filter(p => getStockStatus(getQty(p, branch)) === state.stockFilter);
   }
 
-  // Сортировка
   switch (state.sortMode) {
     case 'smart':
-      // Умная: out → low → ok, внутри по количеству возрастанию
       list.sort((a, b) => {
-        const qa = getQty(a, state.activeBranch);
-        const qb = getQty(b, state.activeBranch);
-        const priority = (q) => q === 0 ? 0 : q <= 5 ? 1 : 2;
-        const pa = priority(qa), pb = priority(qb);
+        const qa = getQty(a, branch);
+        const qb = getQty(b, branch);
+        const pr = q => q === 0 ? 0 : q <= 5 ? 1 : 2;
+        const pa = pr(qa), pb = pr(qb);
         if (pa !== pb) return pa - pb;
         return qa - qb;
       });
       break;
     case 'name':     list.sort((a, b) => a.name.localeCompare(b.name, 'ru')); break;
-    case 'qty-asc':  list.sort((a, b) => getQty(a, state.activeBranch) - getQty(b, state.activeBranch)); break;
-    case 'qty-desc': list.sort((a, b) => getQty(b, state.activeBranch) - getQty(a, state.activeBranch)); break;
+    case 'qty-asc':  list.sort((a, b) => getQty(a, branch) - getQty(b, branch)); break;
+    case 'qty-desc': list.sort((a, b) => getQty(b, branch) - getQty(a, branch)); break;
   }
 
   return list;
 }
 
-function updateStockCounts() {
-  // Подсчёт количества товаров каждого статуса (с учётом только категории и филиала)
+/* ===========================================================
+   FILTER BAR + MODAL
+=========================================================== */
+function initFilters() {
+  let timer;
+  $('searchInput').addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      state.searchQuery = $('searchInput').value;
+      renderAll();
+    }, 220);
+  });
+}
+
+function initFilterModal() {
+  const modal = $('filterModal');
+  $('filterBtn').addEventListener('click', openFilterModal);
+  $('filterModalClose').addEventListener('click', () => closeOverlay(modal));
+  modal.addEventListener('click', e => { if (e.target === modal) closeOverlay(modal); });
+
+  // Чипы статуса
+  modal.querySelectorAll('.filter-stock').forEach(chip => {
+    chip.addEventListener('click', () => {
+      modal.querySelectorAll('.filter-stock').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.stockFilter = chip.dataset.stock;
+      updateFilterBadge();
+      renderAll();
+    });
+  });
+
+  // Категория и сортировка применяются мгновенно
+  $('filterCategorySelect').addEventListener('change', () => {
+    state.categoryFilter = $('filterCategorySelect').value;
+    updateFilterBadge();
+    renderAll();
+    refreshFilterModalCounts();
+  });
+  $('filterSortSelect').addEventListener('change', () => {
+    state.sortMode = $('filterSortSelect').value;
+    updateFilterBadge();
+    renderAll();
+  });
+
+  $('filterResetBtn').addEventListener('click', () => {
+    state.stockFilter    = 'all';
+    state.categoryFilter = 'all';
+    state.sortMode       = 'smart';
+    $('filterCategorySelect').value = 'all';
+    $('filterSortSelect').value     = 'smart';
+    modal.querySelectorAll('.filter-stock').forEach(c => c.classList.remove('active'));
+    modal.querySelector('.filter-stock[data-stock="all"]').classList.add('active');
+    updateFilterBadge();
+    refreshFilterModalCounts();
+    renderAll();
+    showToast('✓ Фильтры сброшены');
+  });
+
+  $('filterApplyBtn').addEventListener('click', () => {
+    closeOverlay(modal);
+    showToast('✓ Фильтры применены');
+  });
+}
+
+function openFilterModal() {
+  // Подсветить активные опции
+  document.querySelectorAll('.filter-stock').forEach(c => {
+    c.classList.toggle('active', c.dataset.stock === state.stockFilter);
+  });
+  $('filterCategorySelect').value = state.categoryFilter;
+  $('filterSortSelect').value     = state.sortMode;
+  refreshFilterModalCounts();
+  openOverlay($('filterModal'));
+}
+
+function refreshFilterModalCounts() {
+  const branch = state.activeBranch;
   let base = [...state.products];
   if (state.categoryFilter !== 'all') {
     base = base.filter(p => p.category === state.categoryFilter);
   }
-  let low = 0, out = 0, ok = 0;
+  let all = base.length, ok = 0, low = 0, out = 0;
+  let totalQty = 0;
   base.forEach(p => {
-    const s = getStockStatus(getQty(p, state.activeBranch));
-    if (s === 'low') low++;
-    else if (s === 'out') out++;
-    else ok++;
+    const q = getQty(p, branch);
+    totalQty += q;
+    const s = getStockStatus(q);
+    if      (s === 'ok')  ok++;
+    else if (s === 'low') low++;
+    else                  out++;
   });
-  const elLow = $('countLow'), elOut = $('countOut'), elOk = $('countOk');
-  if (elLow) elLow.textContent = low;
-  if (elOut) elOut.textContent = out;
-  if (elOk)  elOk.textContent  = ok;
+
+  $('filterCountAll').textContent = all;
+  $('filterCountOk').textContent  = ok;
+  $('filterCountLow').textContent = low;
+  $('filterCountOut').textContent = out;
+
+  const branchLabel = branch === 'all' ? 'Все филиалы' : BRANCH_LABELS[branch];
+  $('filterSubtitle').textContent = `${branchLabel} • Сколько товаров осталось`;
+  $('filterSummaryTitle').textContent = `📊 Сводка${branch === 'all' && isManager() ? ' по филиалам' : ''}`;
+
+  // Сводка
+  const summaryEl = $('filterSummary');
+  if (isManager() && branch === 'all') {
+    summaryEl.innerHTML = `
+      <div class="summary-row summary-row--total">
+        <span>Общее количество</span>
+        <strong>${totalQty} шт</strong>
+      </div>
+      ${BRANCH_KEYS.map(k => {
+        const sum = base.reduce((s, p) => s + (p.branches?.[k] ?? 0), 0);
+        return `
+          <div class="summary-row">
+            <span>🏪 ${BRANCH_LABELS[k]}</span>
+            <strong>${sum} шт</strong>
+          </div>`;
+      }).join('')}
+    `;
+  } else {
+    summaryEl.innerHTML = `
+      <div class="summary-row summary-row--total">
+        <span>Общее количество</span>
+        <strong>${totalQty} шт</strong>
+      </div>
+      <div class="summary-row">
+        <span>✓ В наличии</span>
+        <strong>${ok}</strong>
+      </div>
+      <div class="summary-row">
+        <span>⚠ Мало запасов</span>
+        <strong>${low}</strong>
+      </div>
+      <div class="summary-row">
+        <span>❌ Нет в наличии</span>
+        <strong>${out}</strong>
+      </div>
+    `;
+  }
 }
 
-/* ================================================
-   RENDER
-================================================ */
-function renderAll() {
-  updateStockCounts();
-  if (typeof updateBranchModalStats === 'function') updateBranchModalStats();
-  const list = getFilteredProducts();
-  $('statsText').textContent = `Товаров: ${list.length}`;
+function updateFilterBadge() {
+  const badge = $('filterBadge');
+  let count = 0;
+  if (state.stockFilter    !== 'all')   count++;
+  if (state.categoryFilter !== 'all')   count++;
+  if (state.sortMode       !== 'smart') count++;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'inline-flex' : 'none';
+}
 
-  if (list.length === 0) {
+/* ===========================================================
+   RENDER GRID
+=========================================================== */
+function renderAll() {
+  const myToken = ++renderToken;
+  const list    = getFilteredProducts();
+  $('statsText').textContent = `Товаров: ${list.length}`;
+  if (myToken !== renderToken) return;
+
+  if (!list.length) {
     $('productsGrid').innerHTML = '';
     $('emptyState').style.display = 'flex';
     return;
@@ -1073,20 +1231,18 @@ function renderAll() {
 
   $('emptyState').style.display = 'none';
   $('productsGrid').innerHTML = list.map((p, i) => buildCard(p, i)).join('');
-
   $('productsGrid').querySelectorAll('.product-card').forEach(card => {
     card.addEventListener('click', () => openViewModal(card.dataset.id));
   });
 }
 
 function buildCard(product, index) {
-  const qty    = getQty(product, state.activeBranch);
+  const branch = state.activeBranch;
+  const qty    = getQty(product, branch);
   const status = getStockStatus(qty);
   const badge  = STOCK_BADGE[status];
-  const delay  = Math.min(index * 40, 400);
-
-  // Класс мигания для малых запасов / отсутствия
-  const blinkClass = status === 'out' ? 'product-card--out' : status === 'low' ? 'product-card--low' : '';
+  const delay  = Math.min(index * 35, 350);
+  const blink  = status === 'out' ? 'product-card--out' : status === 'low' ? 'product-card--low' : '';
 
   const imageHtml = product.photo
     ? `<img class="product-card__image" src="${product.photo}" alt="${escHtml(product.name)}" loading="lazy" />`
@@ -1100,19 +1256,33 @@ function buildCard(product, index) {
         Нет фото
       </div>`;
 
-  const branchesHtml = BRANCH_KEYS.map(k => {
-    const bqty = product.branches[k] ?? 0;
-    const bstyle = bqty === 0 ? 'branch-row__qty--out' : bqty <= 3 ? 'branch-row__qty--low' : '';
-    if (state.activeBranch !== 'all' && state.activeBranch !== k) return '';
-    return `
+  // Сотрудник видит только свой филиал → показываем одну строку с количеством
+  const showAllBranches = isManager() && branch === 'all';
+  let branchesHtml = '';
+  if (showAllBranches) {
+    branchesHtml = BRANCH_KEYS.map(k => {
+      const bqty = product.branches?.[k] ?? 0;
+      const cls  = bqty === 0 ? 'branch-row__qty--out' : bqty <= 3 ? 'branch-row__qty--low' : '';
+      return `
+        <div class="branch-row">
+          <span class="branch-row__label">${BRANCH_LABELS[k]}</span>
+          <span class="branch-row__qty ${cls}">${bqty} шт</span>
+        </div>`;
+    }).join('');
+  } else {
+    const cls = qty === 0 ? 'branch-row__qty--out' : qty <= 3 ? 'branch-row__qty--low' : '';
+    branchesHtml = `
       <div class="branch-row">
-        <span class="branch-row__label">${BRANCH_LABELS[k]}</span>
-        <span class="branch-row__qty ${bstyle}">${bqty} ${escHtml(product.unit)}</span>
+        <span class="branch-row__label">${BRANCH_LABELS[branch]}</span>
+        <span class="branch-row__qty ${cls}">${qty} шт</span>
       </div>`;
-  }).join('');
+  }
+
+  const totalText = showAllBranches ? `${getQty(product)} шт` : `${qty} шт`;
+  const totalLabel = showAllBranches ? 'Итого' : 'Остаток';
 
   return `
-    <div class="product-card ${blinkClass}" data-id="${product.id}" style="animation-delay:${delay}ms">
+    <div class="product-card ${blink}" data-id="${product.id}" style="animation-delay:${delay}ms">
       <div class="product-card__image-wrap">
         ${imageHtml}
         <div class="product-card__badge ${badge.cls}">${badge.label}</div>
@@ -1122,31 +1292,32 @@ function buildCard(product, index) {
         <div class="product-card__name">${escHtml(product.name)}</div>
         <div class="product-card__branches">${branchesHtml}</div>
         <div class="product-card__footer">
-          <span class="product-card__total-label">Итого</span>
-          <span class="product-card__total-value">${getQty(product)} ${escHtml(product.unit)}</span>
+          <span class="product-card__total-label">${totalLabel}</span>
+          <span class="product-card__total-value">${totalText}</span>
         </div>
       </div>
     </div>`;
 }
 
-/* ================================================
+/* ===========================================================
    VIEW MODAL
-================================================ */
+=========================================================== */
 function openViewModal(productId) {
   const product = state.products.find(p => p.id === productId);
   if (!product) return;
-
   state.currentViewId = productId;
 
-  const totalQty = getQty(product);
-  const status   = getStockStatus(state.activeBranch === 'all' ? totalQty : getQty(product, state.activeBranch));
-  const badge    = STOCK_BADGE[status];
+  const branch    = state.activeBranch;
+  const showAll   = isManager() && branch === 'all';
+  const totalQty  = showAll ? getQty(product) : getQty(product, branch);
+  const status    = getStockStatus(totalQty);
+  const badge     = STOCK_BADGE[status];
 
   if (product.photo) {
-    $('viewImg').src           = product.photo;
+    $('viewImg').src = product.photo;
     $('viewImg').style.display = 'block';
   } else {
-    $('viewImg').src           = '';
+    $('viewImg').src = '';
     $('viewImg').style.display = 'none';
   }
 
@@ -1155,17 +1326,25 @@ function openViewModal(productId) {
   $('viewCategory').textContent = CATEGORY_LABELS[product.category] || product.category;
   $('viewTitle').textContent    = product.name;
   $('viewDesc').textContent     = product.description || 'Описание не указано';
-  $('viewTotal').textContent    = `${totalQty} ${product.unit}`;
+  $('viewTotal').textContent    = `${totalQty} шт`;
+  $('viewTotalLabel').textContent = showAll ? 'Итого на всех филиалах:' : `Остаток (${BRANCH_LABELS[branch]}):`;
 
-  $('viewBranches').innerHTML = BRANCH_KEYS.map(k => {
-    const q      = product.branches[k] ?? 0;
-    const qstyle = q === 0 ? 'color:var(--danger)' : q <= 3 ? 'color:var(--warning)' : '';
-    return `
-      <div class="modal-branch-row">
-        <span class="modal-branch-row__name">${BRANCH_LABELS[k]}</span>
-        <span class="modal-branch-row__qty" style="${qstyle}">${q} ${escHtml(product.unit)}</span>
-      </div>`;
-  }).join('');
+  if (showAll) {
+    $('viewBranches').innerHTML = BRANCH_KEYS.map(k => {
+      const q = product.branches?.[k] ?? 0;
+      const style = q === 0 ? 'color:var(--danger)' : q <= 3 ? 'color:var(--warning)' : '';
+      return `
+        <div class="modal-branch-row">
+          <span class="modal-branch-row__name">${BRANCH_LABELS[k]}</span>
+          <span class="modal-branch-row__qty" style="${style}">${q} шт</span>
+        </div>`;
+    }).join('');
+  } else {
+    $('viewBranches').innerHTML = '';
+  }
+
+  // Кнопка удаления — только менеджер
+  $('viewDeleteBtn').style.display = isManager() ? '' : 'none';
 
   openOverlay($('viewModal'));
 }
@@ -1175,30 +1354,35 @@ function closeViewModal() {
   state.currentViewId = null;
 }
 
-/* ================================================
-   EDIT MODAL
-================================================ */
+/* ===========================================================
+   EDIT MODAL (с разной формой для роли)
+=========================================================== */
 function openEditModal(productId) {
+  // Менеджер может создавать; staff — только редактировать существующее
+  if (!productId && !isManager()) {
+    showToast('⛔ Только менеджер может добавлять товары', 'error');
+    return;
+  }
+
   state.editingProductId = productId || null;
   $('editModalTitle').textContent = productId ? 'Редактировать товар' : 'Добавить товар';
 
-  state.photoDataUrl                    = null;
-  $('photoPreview').style.display       = 'none';
-  $('photoPlaceholder').style.display   = 'flex';
-  $('photoRemoveBtn').style.display     = 'none';
-  $('photoInput').value                 = '';
+  state.photoDataUrl                  = null;
+  $('photoPreview').style.display     = 'none';
+  $('photoPlaceholder').style.display = 'flex';
+  $('photoRemoveBtn').style.display   = 'none';
+  $('photoInput').value               = '';
 
+  // Поля
   if (productId) {
     const p = state.products.find(pr => pr.id === productId);
     if (!p) return;
     $('editName').value     = p.name;
     $('editCategory').value = p.category;
-    $('editUnit').value     = p.unit;
     $('editDesc').value     = p.description || '';
-    $('qty1').value         = p.branches.branch1 ?? 0;
-    $('qty2').value         = p.branches.branch2 ?? 0;
-    $('qty3').value         = p.branches.branch3 ?? 0;
-
+    $('qty1').value         = p.branches?.branch1 ?? 0;
+    $('qty2').value         = p.branches?.branch2 ?? 0;
+    $('qty3').value         = p.branches?.branch3 ?? 0;
     if (p.photo) {
       state.photoDataUrl                  = p.photo;
       $('photoPreview').src               = p.photo;
@@ -1206,53 +1390,109 @@ function openEditModal(productId) {
       $('photoPlaceholder').style.display = 'none';
       $('photoRemoveBtn').style.display   = 'block';
     }
+
+    // Превью для staff (не редактируется)
+    $('staffProductCat').textContent  = CATEGORY_LABELS[p.category] || p.category;
+    $('staffProductName').textContent = p.name;
   } else {
     $('editName').value     = '';
     $('editCategory').value = 'drinks';
-    $('editUnit').value     = 'шт';
     $('editDesc').value     = '';
     $('qty1').value = $('qty2').value = $('qty3').value = '0';
   }
 
+  // Видимость полей по роли
+  const manager = isManager();
+  $('managerFields').style.display    = manager ? '' : 'none';
+  $('staffProductInfo').style.display = (!manager && productId) ? 'block' : 'none';
+
+  // Поля количества: staff видит только свой филиал
+  document.querySelectorAll('.branch-qty-item').forEach(item => {
+    if (manager) {
+      item.style.display = '';
+    } else {
+      item.style.display = item.dataset.branch === userBranch() ? '' : 'none';
+    }
+  });
+  $('branchesQtyTitle').textContent = manager
+    ? 'Остатки по филиалам (шт)'
+    : `Количество (${BRANCH_LABELS[userBranch()] || ''}, шт)`;
+
   openOverlay($('editModal'));
-  setTimeout(() => $('editName').focus(), 300);
+  if (manager) setTimeout(() => $('editName').focus(), 200);
 }
 
 async function saveProduct() {
-  const name = $('editName').value.trim();
-  if (!name) {
-    $('editName').style.borderColor = 'var(--danger)';
-    $('editName').focus();
-    showToast('Введите название товара', 'error');
-    return;
+  const isEdit  = !!state.editingProductId;
+  const manager = isManager();
+
+  // Валидация
+  if (manager) {
+    const name = $('editName').value.trim();
+    if (!name) {
+      $('editName').style.borderColor = 'var(--danger)';
+      $('editName').focus();
+      showToast('Введите название товара', 'error');
+      return;
+    }
+    $('editName').style.borderColor = '';
   }
-  $('editName').style.borderColor = '';
 
-  const isEdit = !!state.editingProductId;
+  let original = isEdit ? state.products.find(p => p.id === state.editingProductId) : null;
 
-  const product = {
-    id:          state.editingProductId || uid(),
-    name,
-    category:    $('editCategory').value,
-    unit:        $('editUnit').value,
-    description: $('editDesc').value.trim(),
-    photo:       state.photoDataUrl,
-    branches: {
-      branch1: Math.max(0, parseInt($('qty1').value) || 0),
-      branch2: Math.max(0, parseInt($('qty2').value) || 0),
-      branch3: Math.max(0, parseInt($('qty3').value) || 0),
-    },
-  };
+  let product;
+  if (manager) {
+    product = {
+      id:          state.editingProductId || uid(),
+      name:        $('editName').value.trim(),
+      category:    $('editCategory').value,
+      description: $('editDesc').value.trim(),
+      photo:       state.photoDataUrl,
+      branches: {
+        branch1: Math.max(0, parseInt($('qty1').value, 10) || 0),
+        branch2: Math.max(0, parseInt($('qty2').value, 10) || 0),
+        branch3: Math.max(0, parseInt($('qty3').value, 10) || 0),
+      },
+    };
+  } else {
+    // Staff: можно менять только фото и кол-во своего филиала
+    if (!original) { showToast('⛔ Нет прав на создание', 'error'); return; }
+    const myBranch = userBranch();
+    const myQtyId  = myBranch === 'branch1' ? 'qty1' : myBranch === 'branch2' ? 'qty2' : 'qty3';
+    product = {
+      ...original,
+      photo: state.photoDataUrl,
+      branches: {
+        ...original.branches,
+        [myBranch]: Math.max(0, parseInt($(myQtyId).value, 10) || 0),
+      },
+    };
+  }
 
   if (isEdit) {
     const idx = state.products.findIndex(p => p.id === state.editingProductId);
     if (idx > -1) state.products[idx] = product;
-    showToast('✓ Товар обновлён', 'success');
-    await writeLog('edit', `Товар: "${name}"`);
+
+    // Логи (более детально для staff)
+    if (manager) {
+      await writeLog('edit', `"${product.name}"`);
+    } else {
+      const myBranch = userBranch();
+      const oldQty = original?.branches?.[myBranch] ?? 0;
+      const newQty = product.branches[myBranch];
+      const photoChanged = (original?.photo || null) !== (product.photo || null);
+      if (oldQty !== newQty) {
+        await writeLog('qtyEdit', `"${product.name}": ${oldQty} → ${newQty} шт`);
+      }
+      if (photoChanged) {
+        await writeLog('photoEdit', `"${product.name}"`);
+      }
+    }
+    showToast('✓ Сохранено', 'success');
   } else {
     state.products.unshift(product);
     showToast('✓ Товар добавлен', 'success');
-    await writeLog('add', `Товар: "${name}"`);
+    await writeLog('add', `"${product.name}"`);
   }
 
   saveLocal(STORAGE_KEY, state.products);
@@ -1261,10 +1501,11 @@ async function saveProduct() {
   await fbSaveProduct(product);
 }
 
-/* ================================================
-   DELETE / CONFIRM
-================================================ */
+/* ===========================================================
+   DELETE
+=========================================================== */
 function openConfirmModal(productId) {
+  if (!isManager()) { showToast('⛔ Удаление доступно только менеджеру', 'error'); return; }
   const p = state.products.find(pr => pr.id === productId);
   if (!p) return;
   $('confirmText').textContent = `Удалить "${p.name}"? Это действие нельзя отменить.`;
@@ -1273,6 +1514,7 @@ function openConfirmModal(productId) {
 }
 
 async function deleteProduct(productId) {
+  if (!isManager()) return;
   const idx = state.products.findIndex(p => p.id === productId);
   if (idx > -1) {
     const name = state.products[idx].name;
@@ -1280,51 +1522,51 @@ async function deleteProduct(productId) {
     saveLocal(STORAGE_KEY, state.products);
     renderAll();
     showToast(`✓ "${name}" удалён`, 'success');
-    await writeLog('delete', `Товар: "${name}"`);
+    await writeLog('delete', `"${name}"`);
     await fbDeleteProduct(productId);
   }
 }
 
-/* ================================================
+/* ===========================================================
    MODAL HELPERS
-================================================ */
-function openOverlay(overlay) {
-  overlay.classList.add('active');
-  document.body.style.overflow = 'hidden';
-}
-
+=========================================================== */
+function openOverlay(overlay)  { overlay.classList.add('active'); document.body.style.overflow = 'hidden'; }
 function closeOverlay(overlay) {
   overlay.classList.remove('active');
-  const anyOpen = !!document.querySelector('.modal-overlay.active');
-  if (!anyOpen) document.body.style.overflow = '';
+  if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
 }
 
-/* ================================================
+/* ===========================================================
    PHOTO UPLOAD
-================================================ */
+=========================================================== */
 function initPhotoUpload() {
-  const area = $('photoUploadArea');
-  if (!area) return;
-
-  area.addEventListener('click', e => {
+  $('photoUploadArea').addEventListener('click', e => {
     if (e.target === $('photoRemoveBtn')) return;
     $('photoInput').click();
   });
-
   $('photoInput').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      state.photoDataUrl                  = ev.target.result;
-      $('photoPreview').src               = ev.target.result;
+    // Сжимаем фото на лету через canvas — Firebase RTDB не любит большие base64
+    compressImage(file, 800, 0.8).then(dataUrl => {
+      state.photoDataUrl                  = dataUrl;
+      $('photoPreview').src               = dataUrl;
       $('photoPreview').style.display     = 'block';
       $('photoPlaceholder').style.display = 'none';
       $('photoRemoveBtn').style.display   = 'block';
-    };
-    reader.readAsDataURL(file);
+    }).catch(() => {
+      // фолбэк — без сжатия
+      const reader = new FileReader();
+      reader.onload = ev => {
+        state.photoDataUrl                  = ev.target.result;
+        $('photoPreview').src               = ev.target.result;
+        $('photoPreview').style.display     = 'block';
+        $('photoPlaceholder').style.display = 'none';
+        $('photoRemoveBtn').style.display   = 'block';
+      };
+      reader.readAsDataURL(file);
+    });
   });
-
   $('photoRemoveBtn').addEventListener('click', e => {
     e.stopPropagation();
     state.photoDataUrl                  = null;
@@ -1336,15 +1578,41 @@ function initPhotoUpload() {
   });
 }
 
-/* ================================================
-   QTY STEPPERS
-================================================ */
+function compressImage(file, maxDim = 800, quality = 0.8) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else                 { width  = Math.round(width  * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        try { resolve(canvas.toDataURL('image/jpeg', quality)); }
+        catch (e) { reject(e); }
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ===========================================================
+   STEPPERS
+=========================================================== */
 function initSteppers() {
   document.querySelectorAll('.qty-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const input = $(btn.dataset.target);
       if (!input) return;
-      let val = parseInt(input.value) || 0;
+      let val = parseInt(input.value, 10) || 0;
       if (btn.dataset.action === 'plus')  val++;
       if (btn.dataset.action === 'minus') val = Math.max(0, val - 1);
       input.value = val;
@@ -1352,9 +1620,9 @@ function initSteppers() {
   });
 }
 
-/* ================================================
+/* ===========================================================
    PRINT
-================================================ */
+=========================================================== */
 function preparePrint() {
   const list = getFilteredProducts();
   const now  = new Date();
@@ -1362,8 +1630,8 @@ function preparePrint() {
     day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 
-  const isAll = state.activeBranch === 'all';
-  const branchLabel = isAll ? 'Все филиалы' : BRANCH_LABELS[state.activeBranch];
+  const showAll = isManager() && state.activeBranch === 'all';
+  const branchLabel = showAll ? 'Все филиалы' : BRANCH_LABELS[state.activeBranch];
 
   $('printBranchLabel').textContent = branchLabel;
   $('printTitle').textContent       = `Отчёт по остаткам — ${branchLabel}`;
@@ -1371,7 +1639,7 @@ function preparePrint() {
   $('printFooterDate').textContent  = dateStr;
 
   const thead = $('printTableHead');
-  if (isAll) {
+  if (showAll) {
     thead.innerHTML = `
       <th style="width:60px">Фото</th><th>Товар</th><th>Категория</th>
       ${BRANCH_KEYS.map(k => `<th style="text-align:center">${BRANCH_LABELS[k]}</th>`).join('')}
@@ -1385,15 +1653,15 @@ function preparePrint() {
       ? `<img src="${p.photo}" alt="${escHtml(p.name)}" />`
       : `<div class="print-img-placeholder">—</div>`;
     let dataCells = '';
-    if (isAll) {
+    if (showAll) {
       const cells = BRANCH_KEYS.map(k => {
-        const q = p.branches[k] ?? 0;
+        const q = p.branches?.[k] ?? 0;
         return `<td style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q}</td>`;
       }).join('');
-      dataCells = `${cells}<td class="print-td-total">${getQty(p)} ${escHtml(p.unit)}</td>`;
+      dataCells = `${cells}<td class="print-td-total">${getQty(p)} шт</td>`;
     } else {
-      const q = p.branches[state.activeBranch] ?? 0;
-      dataCells = `<td class="print-td-total" style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q} ${escHtml(p.unit)}</td>`;
+      const q = p.branches?.[state.activeBranch] ?? 0;
+      dataCells = `<td class="print-td-total" style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q} шт</td>`;
     }
     return `
       <tr>
@@ -1414,62 +1682,13 @@ function preparePrint() {
   }, 200);
 }
 
-/* ================================================
-   BRANCH NAV
-================================================ */
-function initBranchNav() {
-  const branches = $('branches');
-  if (!branches) return;
-  branches.querySelectorAll('.branch-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      branches.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.activeBranch = btn.dataset.branch;
-      updateBranchIndicator();
-      renderAll();
-    });
-  });
-}
-
-/* ================================================
-   SEARCH & FILTER
-================================================ */
-function initFilters() {
-  let timer;
-  const searchEl   = $('searchInput');
-  const catEl      = $('categoryFilter');
-  const sortEl     = $('sortFilter');
-  if (!searchEl) return;
-
-  searchEl.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(() => { state.searchQuery = searchEl.value; renderAll(); }, 220);
-  });
-  catEl.addEventListener('change',  () => { state.categoryFilter = catEl.value; renderAll(); });
-  sortEl.addEventListener('change', () => { state.sortMode = sortEl.value; renderAll(); });
-
-  // Быстрые фильтры (чипы)
-  const quick = $('quickFilters');
-  if (quick) {
-    quick.querySelectorAll('.quick-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        quick.querySelectorAll('.quick-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        state.stockFilter = chip.dataset.stock;
-        renderAll();
-      });
-    });
-  }
-}
-
-/* ================================================
-   PRODUCT EVENT LISTENERS
-================================================ */
-function initProductEventListeners() {
+/* ===========================================================
+   PRODUCT EVENTS
+=========================================================== */
+function initProductEvents() {
   $('addProductBtn').addEventListener('click', () => openEditModal(null));
   $('printBtn').addEventListener('click', preparePrint);
 
-  // View modal
   $('viewModalClose').addEventListener('click', closeViewModal);
   $('viewModal').addEventListener('click', e => { if (e.target === $('viewModal')) closeViewModal(); });
   $('viewEditBtn').addEventListener('click', () => {
@@ -1483,19 +1702,20 @@ function initProductEventListeners() {
     openConfirmModal(id);
   });
 
-  // Edit modal
   $('editModalClose').addEventListener('click', () => closeOverlay($('editModal')));
   $('editCancelBtn').addEventListener('click',  () => closeOverlay($('editModal')));
   $('editModal').addEventListener('click', e => { if (e.target === $('editModal')) closeOverlay($('editModal')); });
   $('editSaveBtn').addEventListener('click', saveProduct);
 
-  // Confirm delete product
   $('confirmCancelBtn').addEventListener('click', () => {
     closeOverlay($('confirmModal'));
     state.pendingDeleteId = null;
   });
   $('confirmModal').addEventListener('click', e => {
-    if (e.target === $('confirmModal')) { closeOverlay($('confirmModal')); state.pendingDeleteId = null; }
+    if (e.target === $('confirmModal')) {
+      closeOverlay($('confirmModal'));
+      state.pendingDeleteId = null;
+    }
   });
   $('confirmDeleteBtn').addEventListener('click', () => {
     closeOverlay($('confirmModal'));
@@ -1505,21 +1725,20 @@ function initProductEventListeners() {
     }
   });
 
-  // ESC
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    const openModals = document.querySelectorAll('.modal-overlay.active');
-    if (openModals.length) {
-      const last = openModals[openModals.length - 1];
+    const open = document.querySelectorAll('.modal-overlay.active');
+    if (open.length) {
+      const last = open[open.length - 1];
       last.classList.remove('active');
       if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
     }
   });
 }
 
-/* ================================================
+/* ===========================================================
    INIT
-================================================ */
+=========================================================== */
 function init() {
   initAuth();
 }
