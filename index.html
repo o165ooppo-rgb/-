@@ -17,7 +17,7 @@
 </head>
 <body>
 
-  <!-- ===== AUTH MODAL ===== -->
+  <!-- ===== AUTH MODAL (только вход) ===== -->
   <div class="auth-overlay" id="authOverlay">
     <div class="auth-box" id="authBox">
       <div class="auth-logo">
@@ -28,18 +28,9 @@
         <span>Склад Mone</span>
       </div>
 
-      <!-- Экран выбора -->
-      <div class="auth-screen" id="authChoose">
-        <h2 class="auth-title">Добро пожаловать</h2>
-        <p class="auth-sub">Войдите в свой аккаунт или создайте новый</p>
-        <button class="auth-btn auth-btn--primary" id="goLoginBtn">Войти</button>
-        <button class="auth-btn auth-btn--outline" id="goRegisterBtn">Создать аккаунт</button>
-      </div>
-
-      <!-- Экран входа -->
-      <div class="auth-screen" id="authLogin" style="display:none">
-        <h2 class="auth-title">Вход</h2>
-        <p class="auth-sub">Введите логин и пароль</p>
+      <div class="auth-screen" id="authLogin">
+        <h2 class="auth-title">Вход в систему</h2>
+        <p class="auth-sub">Введите логин и пароль вашего аккаунта</p>
         <div class="auth-field">
           <label>Логин</label>
           <input type="text" id="loginUsername" placeholder="Ваш логин" autocomplete="username"/>
@@ -48,40 +39,17 @@
           <label>Пароль</label>
           <div class="auth-input-wrap">
             <input type="password" id="loginPassword" placeholder="Пароль" autocomplete="current-password"/>
-            <button class="auth-eye" id="loginEye" type="button">
+            <button class="auth-eye" id="loginEye" type="button" aria-label="Показать пароль">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
           </div>
         </div>
         <div class="auth-error" id="loginError"></div>
         <button class="auth-btn auth-btn--primary" id="loginSubmitBtn">Войти</button>
-        <button class="auth-link" id="backFromLogin">← Назад</button>
-      </div>
 
-      <!-- Экран регистрации -->
-      <div class="auth-screen" id="authRegister" style="display:none">
-        <h2 class="auth-title">Создать аккаунт</h2>
-        <p class="auth-sub">Заполните данные для регистрации</p>
-        <div class="auth-field">
-          <label>Имя</label>
-          <input type="text" id="regName" placeholder="Ваше имя" autocomplete="name"/>
+        <div class="auth-hint" id="authHint">
+          <strong>Подсказка:</strong> данные для входа выдаёт менеджер.
         </div>
-        <div class="auth-field">
-          <label>Логин</label>
-          <input type="text" id="regUsername" placeholder="Придумайте логин" autocomplete="username"/>
-        </div>
-        <div class="auth-field">
-          <label>Пароль</label>
-          <div class="auth-input-wrap">
-            <input type="password" id="regPassword" placeholder="Придумайте пароль" autocomplete="new-password"/>
-            <button class="auth-eye" id="regEye" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-        </div>
-        <div class="auth-error" id="regError"></div>
-        <button class="auth-btn auth-btn--primary" id="regSubmitBtn">Создать аккаунт</button>
-        <button class="auth-link" id="backFromRegister">← Назад</button>
       </div>
     </div>
   </div>
@@ -92,23 +60,24 @@
       <div class="manager-panel__header">
         <div class="manager-panel__title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Менеджер
+          Панель менеджера
         </div>
-        <button class="manager-panel__close" id="managerCloseBtn">✕</button>
+        <button class="manager-panel__close" id="managerCloseBtn" aria-label="Закрыть">✕</button>
       </div>
 
-      <!-- Вкладки -->
       <div class="manager-tabs">
-        <button class="manager-tab active" data-tab="users">👥 Пользователи</button>
+        <button class="manager-tab active" data-tab="users">👥 Аккаунты</button>
         <button class="manager-tab" data-tab="logs">📋 Журнал</button>
       </div>
 
       <!-- Вкладка пользователей -->
       <div class="manager-tab-content" id="tabUsers">
         <div class="manager-users-header">
-          <span class="manager-section-label">Все аккаунты</span>
-          <button class="manager-add-user-btn" id="managerAddUserBtn">+ Добавить</button>
+          <span class="manager-section-label">Логины и пароли</span>
         </div>
+        <p class="manager-hint">
+          Изменив логин или пароль филиала, вы автоматически закроете доступ старому сотруднику.
+        </p>
         <div class="manager-users-list" id="managerUsersList"></div>
       </div>
 
@@ -123,41 +92,40 @@
     </div>
   </div>
 
-  <!-- ===== MANAGER ADD USER MODAL ===== -->
-  <div class="modal-overlay" id="managerAddModal">
+  <!-- ===== MANAGER EDIT USER MODAL ===== -->
+  <div class="modal-overlay" id="userEditModal">
     <div class="modal modal--password">
-      <button class="modal__close" id="managerAddModalClose">
+      <button class="modal__close" id="userEditClose" aria-label="Закрыть">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-      <h2 style="margin-bottom:18px;font-size:17px;font-weight:800;">Добавить пользователя</h2>
+      <h2 style="margin-bottom:6px;font-size:18px;font-weight:800;" id="userEditTitle">Изменить аккаунт</h2>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px" id="userEditSubtitle">Заполните то, что хотите поменять</p>
+
       <div class="auth-field" style="text-align:left">
-        <label>Имя</label>
-        <input type="text" id="maName" placeholder="Имя" class="auth-standalone-input"/>
+        <label>Отображаемое имя</label>
+        <input type="text" id="ueName" placeholder="Имя пользователя" class="auth-standalone-input"/>
       </div>
       <div class="auth-field" style="text-align:left;margin-top:10px">
         <label>Логин</label>
-        <input type="text" id="maUsername" placeholder="Логин" class="auth-standalone-input"/>
+        <input type="text" id="ueUsername" placeholder="Логин для входа" class="auth-standalone-input" autocapitalize="none"/>
       </div>
       <div class="auth-field" style="text-align:left;margin-top:10px">
-        <label>Пароль</label>
-        <input type="password" id="maPassword" placeholder="Пароль" class="auth-standalone-input"/>
+        <label>Новый пароль <span style="font-weight:400;color:var(--text-muted)">(оставьте пустым, чтобы не менять)</span></label>
+        <div class="auth-input-wrap">
+          <input type="password" id="uePassword" placeholder="Новый пароль" class="auth-standalone-input"/>
+          <button class="auth-eye" id="ueEye" type="button" aria-label="Показать пароль" style="right:9px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="auth-field" style="text-align:left;margin-top:10px">
-        <label>Роль</label>
-        <select id="maRole" class="auth-standalone-input">
-          <option value="staff">Сотрудник</option>
-          <option value="manager">Менеджер</option>
-        </select>
-      </div>
-      <div class="auth-error" id="maError" style="margin-top:8px"></div>
-      <button class="btn-save btn-save--full" id="maSubmitBtn" style="margin-top:14px">Создать</button>
+      <div class="auth-error" id="ueError" style="margin-top:8px"></div>
+      <button class="btn-save btn-save--full" id="ueSubmitBtn" style="margin-top:14px">Сохранить</button>
     </div>
   </div>
 
   <!-- ===== HEADER ===== -->
   <header class="header" id="mainHeader" style="display:none">
     <div class="header__inner">
-      <!-- Бургер-меню (только на мобильных) -->
       <button class="btn-burger" id="burgerBtn" aria-label="Меню">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
           <line x1="3" y1="6" x2="21" y2="6"/>
@@ -174,7 +142,7 @@
         <span class="header__title">Склад Mone</span>
       </div>
 
-      <!-- Филиалы (только на десктопе) -->
+      <!-- Филиалы (только на десктопе и только для менеджера) -->
       <nav class="branches" id="branches">
         <button class="branch-btn active" data-branch="all">Все филиалы</button>
         <button class="branch-btn" data-branch="branch1">Сибирский</button>
@@ -185,13 +153,11 @@
       <div class="header__actions">
         <span class="sync-indicator sync--connecting" id="syncIndicator">⏳ Подключение...</span>
 
-        <!-- Кнопка менеджера (видна только менеджерам, скрыта на мобильных) -->
         <button class="btn-manager" id="managerPanelBtn" style="display:none" title="Панель менеджера">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span>Менеджер</span>
         </button>
 
-        <!-- Юзер аватар (на десктопе) -->
         <div class="user-chip" id="userChip">
           <div class="user-chip__avatar" id="userAvatar">?</div>
           <span class="user-chip__name" id="userChipName"></span>
@@ -217,7 +183,7 @@
           <span>Печать</span>
         </button>
 
-        <button class="btn-add" id="addProductBtn">
+        <button class="btn-add" id="addProductBtn" style="display:none">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
@@ -226,7 +192,6 @@
       </div>
     </div>
 
-    <!-- Мобильный индикатор филиала (под шапкой, только на мобильных) -->
     <button class="branch-indicator" id="branchIndicator">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -240,10 +205,9 @@
     </button>
   </header>
 
-  <!-- ===== МОБИЛЬНОЕ БОКОВОЕ МЕНЮ (Drawer) ===== -->
+  <!-- ===== DRAWER (мобильное меню) ===== -->
   <div class="drawer-overlay" id="drawerOverlay">
     <div class="drawer" id="drawer">
-      <!-- Профиль -->
       <div class="drawer-profile">
         <div class="drawer-profile__avatar" id="drawerAvatar">?</div>
         <div class="drawer-profile__info">
@@ -257,17 +221,15 @@
         </button>
       </div>
 
-      <!-- Sync индикатор -->
       <div class="drawer-sync" id="drawerSync">
         <span id="drawerSyncDot" class="drawer-sync__dot"></span>
         <span id="drawerSyncText">Подключение...</span>
       </div>
 
-      <!-- Действия -->
       <div class="drawer-section">
         <div class="drawer-section__title">Действия</div>
 
-        <button class="drawer-item" id="drawerBranchBtn">
+        <button class="drawer-item" id="drawerBranchBtn" style="display:none">
           <span class="drawer-item__icon">📍</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Филиал</span>
@@ -278,7 +240,7 @@
           </svg>
         </button>
 
-        <button class="drawer-item" id="drawerAddBtn">
+        <button class="drawer-item" id="drawerAddBtn" style="display:none">
           <span class="drawer-item__icon">➕</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Добавить товар</span>
@@ -300,7 +262,6 @@
         </button>
       </div>
 
-      <!-- Выход -->
       <div class="drawer-footer">
         <button class="drawer-item drawer-item--danger" id="drawerLogoutBtn">
           <span class="drawer-item__icon">🚪</span>
@@ -312,7 +273,7 @@
     </div>
   </div>
 
-  <!-- ===== МОДАЛКА ВЫБОРА ФИЛИАЛА ===== -->
+  <!-- ===== МОДАЛКА ВЫБОРА ФИЛИАЛА (только для менеджера) ===== -->
   <div class="modal-overlay" id="branchModal">
     <div class="modal modal--branch">
       <button class="modal__close" id="branchModalClose">
@@ -385,48 +346,91 @@
           </svg>
           <input type="text" id="searchInput" class="search-input" placeholder="Поиск: например '5 шт', 'мало', 'pepsi'..." />
         </div>
-        <div class="filter-group">
-          <select id="categoryFilter" class="filter-select">
-            <option value="all">Все категории</option>
-            <option value="drinks">Напитки</option>
-            <option value="disposable">Одноразовая посуда</option>
-            <option value="food">Продукты</option>
-            <option value="cleaning">Чистящие средства</option>
-            <option value="other">Прочее</option>
-          </select>
-          <select id="sortFilter" class="filter-select">
-            <option value="smart">Умная сортировка</option>
-            <option value="name">По названию</option>
-            <option value="qty-asc">Кол-во: меньше → больше</option>
-            <option value="qty-desc">Кол-во: больше → меньше</option>
-          </select>
-        </div>
+
+        <button class="btn-filter" id="filterBtn" aria-label="Открыть фильтр">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+          </svg>
+          <span>Фильтр</span>
+          <span class="btn-filter__badge" id="filterBadge" style="display:none">0</span>
+        </button>
+
         <div class="stats-bar">
           <span id="statsText">Товаров: 0</span>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- Быстрые фильтры (умный фильтр) -->
-      <div class="quick-filters" id="quickFilters">
-        <button class="quick-chip active" data-stock="all">
-          <span class="quick-chip__dot quick-chip__dot--all"></span>
-          Все
-        </button>
-        <button class="quick-chip quick-chip--low" data-stock="low">
-          <span class="quick-chip__dot quick-chip__dot--low"></span>
-          ⚠ Мало запасов
-          <span class="quick-chip__count" id="countLow">0</span>
-        </button>
-        <button class="quick-chip quick-chip--out" data-stock="out">
-          <span class="quick-chip__dot quick-chip__dot--out"></span>
-          ❌ Нет в наличии
-          <span class="quick-chip__count" id="countOut">0</span>
-        </button>
-        <button class="quick-chip quick-chip--ok" data-stock="ok">
-          <span class="quick-chip__dot quick-chip__dot--ok"></span>
-          ✓ В наличии
-          <span class="quick-chip__count" id="countOk">0</span>
-        </button>
+  <!-- ===== FILTER MODAL ===== -->
+  <div class="modal-overlay" id="filterModal">
+    <div class="modal modal--filter">
+      <button class="modal__close" id="filterModalClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <h2 class="filter-modal__title">Фильтр и сортировка</h2>
+      <p class="filter-modal__sub" id="filterSubtitle">Сколько товаров осталось</p>
+
+      <!-- Сводка остатков -->
+      <div class="filter-section">
+        <div class="filter-section__title">📦 Остатки</div>
+        <div class="filter-stocks" id="filterStocks">
+          <button class="filter-stock active" data-stock="all">
+            <span class="filter-stock__dot filter-stock__dot--all"></span>
+            <span class="filter-stock__label">Все товары</span>
+            <span class="filter-stock__count" id="filterCountAll">0</span>
+          </button>
+          <button class="filter-stock filter-stock--ok" data-stock="ok">
+            <span class="filter-stock__dot filter-stock__dot--ok"></span>
+            <span class="filter-stock__label">В наличии</span>
+            <span class="filter-stock__count" id="filterCountOk">0</span>
+          </button>
+          <button class="filter-stock filter-stock--low" data-stock="low">
+            <span class="filter-stock__dot filter-stock__dot--low"></span>
+            <span class="filter-stock__label">Мало запасов</span>
+            <span class="filter-stock__count" id="filterCountLow">0</span>
+          </button>
+          <button class="filter-stock filter-stock--out" data-stock="out">
+            <span class="filter-stock__dot filter-stock__dot--out"></span>
+            <span class="filter-stock__label">Нет в наличии</span>
+            <span class="filter-stock__count" id="filterCountOut">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Сводка по штукам -->
+      <div class="filter-section">
+        <div class="filter-section__title" id="filterSummaryTitle">📊 Сводка</div>
+        <div class="filter-summary" id="filterSummary"></div>
+      </div>
+
+      <!-- Категория -->
+      <div class="filter-section">
+        <div class="filter-section__title">🗂 Категория</div>
+        <select id="filterCategorySelect" class="filter-fullselect">
+          <option value="all">Все категории</option>
+          <option value="drinks">Напитки</option>
+          <option value="disposable">Одноразовая посуда</option>
+          <option value="food">Продукты</option>
+          <option value="cleaning">Чистящие средства</option>
+          <option value="other">Прочее</option>
+        </select>
+      </div>
+
+      <!-- Сортировка -->
+      <div class="filter-section">
+        <div class="filter-section__title">↕ Сортировка</div>
+        <select id="filterSortSelect" class="filter-fullselect">
+          <option value="smart">Умная сортировка (мало → много)</option>
+          <option value="name">По названию (А → Я)</option>
+          <option value="qty-asc">Кол-во: меньше → больше</option>
+          <option value="qty-desc">Кол-во: больше → меньше</option>
+        </select>
+      </div>
+
+      <div class="filter-modal__footer">
+        <button class="btn-cancel" id="filterResetBtn">Сбросить</button>
+        <button class="btn-save" id="filterApplyBtn" style="background:var(--accent);color:#fff">Применить</button>
       </div>
     </div>
   </div>
@@ -463,7 +467,7 @@
         <p class="modal__desc" id="viewDesc"></p>
         <div class="modal__branches-grid" id="viewBranches"></div>
         <div class="modal__total">
-          <span>Итого на всех филиалах:</span>
+          <span id="viewTotalLabel">Итого на всех филиалах:</span>
           <strong id="viewTotal"></strong>
         </div>
         <div class="modal__actions">
@@ -512,12 +516,13 @@
         <button class="photo-remove-btn" id="photoRemoveBtn" style="display:none;">✕</button>
       </div>
 
-      <div class="form-grid">
+      <!-- Поля только для менеджера -->
+      <div class="form-grid" id="managerFields">
         <div class="form-group form-group--full">
           <label>Название товара <span class="required">*</span></label>
           <input type="text" id="editName" placeholder="Например: Pepsi 0.5л" />
         </div>
-        <div class="form-group">
+        <div class="form-group form-group--full">
           <label>Категория</label>
           <select id="editCategory">
             <option value="drinks">Напитки</option>
@@ -527,46 +532,42 @@
             <option value="other">Прочее</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>Единица измерения</label>
-          <select id="editUnit">
-            <option value="шт">шт</option>
-            <option value="уп">уп</option>
-            <option value="кг">кг</option>
-            <option value="л">л</option>
-            <option value="коробка">коробка</option>
-          </select>
-        </div>
         <div class="form-group form-group--full">
           <label>Описание</label>
           <textarea id="editDesc" rows="2" placeholder="Дополнительная информация о товаре..."></textarea>
         </div>
       </div>
 
+      <!-- Превью названия (для сотрудника) -->
+      <div class="staff-product-info" id="staffProductInfo" style="display:none">
+        <div class="staff-product-info__cat" id="staffProductCat"></div>
+        <div class="staff-product-info__name" id="staffProductName"></div>
+      </div>
+
       <div class="branches-qty-section">
-        <h3 class="branches-qty-title">Остатки по филиалам</h3>
-        <div class="branches-qty-grid">
-          <div class="branch-qty-item">
+        <h3 class="branches-qty-title" id="branchesQtyTitle">Остатки по филиалам (шт)</h3>
+        <div class="branches-qty-grid" id="branchesQtyGrid">
+          <div class="branch-qty-item" data-branch="branch1">
             <label>Сибирский</label>
             <div class="qty-stepper">
               <button class="qty-btn" data-action="minus" data-target="qty1">−</button>
-              <input type="number" id="qty1" class="qty-input" value="0" min="0" />
+              <input type="number" id="qty1" class="qty-input" value="0" min="0" inputmode="numeric"/>
               <button class="qty-btn" data-action="plus" data-target="qty1">+</button>
             </div>
           </div>
-          <div class="branch-qty-item">
+          <div class="branch-qty-item" data-branch="branch2">
             <label>Фреско</label>
             <div class="qty-stepper">
               <button class="qty-btn" data-action="minus" data-target="qty2">−</button>
-              <input type="number" id="qty2" class="qty-input" value="0" min="0" />
+              <input type="number" id="qty2" class="qty-input" value="0" min="0" inputmode="numeric"/>
               <button class="qty-btn" data-action="plus" data-target="qty2">+</button>
             </div>
           </div>
-          <div class="branch-qty-item">
+          <div class="branch-qty-item" data-branch="branch3">
             <label>Гелион</label>
             <div class="qty-stepper">
               <button class="qty-btn" data-action="minus" data-target="qty3">−</button>
-              <input type="number" id="qty3" class="qty-input" value="0" min="0" />
+              <input type="number" id="qty3" class="qty-input" value="0" min="0" inputmode="numeric"/>
               <button class="qty-btn" data-action="plus" data-target="qty3">+</button>
             </div>
           </div>
@@ -586,7 +587,7 @@
     </div>
   </div>
 
-  <!-- ===== CONFIRM DELETE MODAL ===== -->
+  <!-- ===== CONFIRM DELETE PRODUCT ===== -->
   <div class="modal-overlay" id="confirmModal">
     <div class="modal modal--confirm">
       <div class="confirm-icon">
@@ -601,25 +602,6 @@
       <div class="confirm-btns">
         <button class="btn-cancel" id="confirmCancelBtn">Отмена</button>
         <button class="btn-delete-confirm" id="confirmDeleteBtn">Удалить</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== CONFIRM DELETE USER MODAL ===== -->
-  <div class="modal-overlay" id="confirmUserModal">
-    <div class="modal modal--confirm">
-      <div class="confirm-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="20" fill="#FF3B30" opacity="0.1" stroke="#FF3B30" stroke-width="2"/>
-          <line x1="24" y1="14" x2="24" y2="28" stroke="#FF3B30" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="24" cy="34" r="2" fill="#FF3B30"/>
-        </svg>
-      </div>
-      <h2>Удалить аккаунт?</h2>
-      <p id="confirmUserText">Это действие нельзя отменить.</p>
-      <div class="confirm-btns">
-        <button class="btn-cancel" id="confirmUserCancelBtn">Отмена</button>
-        <button class="btn-delete-confirm" id="confirmUserDeleteBtn">Удалить</button>
       </div>
     </div>
   </div>
