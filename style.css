@@ -2603,3 +2603,123 @@ body.role-staff .drawer-item--branch { display: none !important; }
   padding: 26px 24px 22px;
 }
 
+
+/* ============================================================
+   НОВЫЕ СТИЛИ: FAB, кнопки фото, toolbar без поиска
+   ============================================================ */
+
+/* ---------- FAB (кнопка + для сотрудника) ---------- */
+.fab-add-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 20px;
+  z-index: 300;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 20px rgba(24,119,242,0.40), 0 2px 8px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--t-bounce), box-shadow var(--t-fast), background var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.fab-add-btn svg { width: 26px; height: 26px; }
+.fab-add-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.07);
+  box-shadow: 0 6px 28px rgba(24,119,242,0.45);
+}
+.fab-add-btn:active { transform: scale(0.95); }
+
+/* ---------- Кнопки выбора источника фото ---------- */
+.photo-source-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+.photo-source-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+.photo-source-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+  color: var(--accent);
+}
+.photo-source-btn:active { transform: scale(0.97); }
+
+/* ---------- Toolbar без поиска: stats + filter ---------- */
+.toolbar__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.stats-bar {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ---------- Карточка без категории ---------- */
+.product-card__category { display: none !important; }
+
+/* ---------- Убираем категорию из модалки просмотра ---------- */
+.modal__category { display: none !important; }
+
+/* ---------- Кнопка удалить внутри формы редактирования (менеджер) ---------- */
+.btn-delete-inline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--danger);
+  background: var(--danger-light);
+  color: var(--danger);
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  margin-top: 8px;
+  width: 100%;
+  justify-content: center;
+}
+.btn-delete-inline:hover {
+  background: var(--danger);
+  color: #fff;
+}
+.btn-delete-inline svg { width: 16px; height: 16px; }
+
+/* ---------- staff-product-info без категории ---------- */
+.staff-product-info__cat { display: none !important; }
+.staff-product-info__name {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+/* ---------- Мобильные поправки ---------- */
+@media (max-width: 600px) {
+  .photo-source-btns { flex-direction: column; }
+  .fab-add-btn { bottom: 20px; right: 16px; }
+}
