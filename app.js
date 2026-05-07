@@ -556,10 +556,10 @@ async function handleLogout() {
 function applyRoleVisibility() {
   const manager = isManager();
 
-  // Менеджер — кнопки добавления и панели
+  // Менеджер — панель менеджера
   $('addProductBtn').style.display    = manager ? '' : 'none';
   $('managerPanelBtn').style.display  = manager ? '' : 'none';
-  $('drawerAddBtn').style.display     = manager ? '' : 'none';
+  $('drawerAddBtn').style.display     = ''; // видно всем — и менеджеру, и сотруднику
   $('drawerManagerBtn').style.display = manager ? '' : 'none';
 
   // Сотрудник — FAB кнопка «+»
@@ -1173,12 +1173,6 @@ function buildCard(product, index) {
    EDIT MODAL (клик на карточку → форма)
 =========================================================== */
 function openEditModal(productId) {
-  // Менеджер может создавать; staff — только редактировать существующее
-  if (!productId && !isManager()) {
-    showToast('⛔ Только менеджер может добавлять товары', 'error');
-    return;
-  }
-
   state.editingProductId = productId || null;
   $('editModalTitle').textContent = productId ? 'Изменить товар' : 'Добавить товар';
 
@@ -1210,11 +1204,21 @@ function openEditModal(productId) {
     $('editName').value = '';
     $('editDesc').value = '';
     $('qty1').value = $('qty2').value = $('qty3').value = '0';
+    const sn = $('staffEditName'); if (sn) sn.value = '';
   }
 
   const manager = isManager();
+
+  // Менеджер: поля названия и описания всегда видны
+  // Сотрудник: поле названия видно при добавлении нового; при редактировании — только превью имени
   $('managerFields').style.display    = manager ? '' : 'none';
   $('staffProductInfo').style.display = (!manager && productId) ? 'block' : 'none';
+
+  // Поле названия для сотрудника при добавлении нового товара
+  const staffNameFieldWrap = $('staffNameFieldWrap');
+  if (staffNameFieldWrap) {
+    staffNameFieldWrap.style.display = (!manager && !productId) ? '' : 'none';
+  }
 
   // Показать удаление только менеджеру и только при редактировании
   const delBtn = $('editDeleteBtn');
@@ -1268,17 +1272,40 @@ async function saveProduct() {
       },
     };
   } else {
-    if (!original) { showToast('⛔ Нет прав на создание', 'error'); return; }
     const myBranch = userBranch();
     const myQtyId  = myBranch === 'branch1' ? 'qty1' : myBranch === 'branch2' ? 'qty2' : 'qty3';
-    product = {
-      ...original,
-      photo: state.photoDataUrl,
-      branches: {
-        ...original.branches,
-        [myBranch]: Math.max(0, parseInt($(myQtyId).value, 10) || 0),
-      },
-    };
+
+    if (!isEdit) {
+      // Сотрудник создаёт новый товар
+      const staffNameInp = $('staffEditName');
+      const staffName = staffNameInp ? staffNameInp.value.trim() : '';
+      if (!staffName) {
+        if (staffNameInp) { staffNameInp.style.borderColor = 'var(--danger)'; staffNameInp.focus(); }
+        showToast('Введите название товара', 'error');
+        return;
+      }
+      if (staffNameInp) staffNameInp.style.borderColor = '';
+      const branches = { branch1: 0, branch2: 0, branch3: 0 };
+      branches[myBranch] = Math.max(0, parseInt($(myQtyId).value, 10) || 0);
+      product = {
+        id:          uid(),
+        name:        staffName,
+        category:    'other',
+        description: '',
+        photo:       state.photoDataUrl,
+        branches,
+      };
+    } else {
+      if (!original) { showToast('⛔ Товар не найден', 'error'); return; }
+      product = {
+        ...original,
+        photo: state.photoDataUrl,
+        branches: {
+          ...original.branches,
+          [myBranch]: Math.max(0, parseInt($(myQtyId).value, 10) || 0),
+        },
+      };
+    }
   }
 
   if (isEdit) {
@@ -1523,10 +1550,7 @@ function initProductEvents() {
   const fab = $('fabAddBtn');
   if (fab) {
     fab.addEventListener('click', () => {
-      // Сотрудник нажимает «+» → открываем модалку добавления (только фото+кол-во)
-      // Но т.к. сотрудник не может создавать новые товары, показываем сообщение
-      // Менеджер должен добавить товар сначала — сотрудник только редактирует
-      showToast('Нажмите на товар чтобы изменить количество', 'default');
+      openEditModal(null);
     });
   }
 
