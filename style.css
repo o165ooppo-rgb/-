@@ -2723,3 +2723,616 @@ body.role-staff .drawer-item--branch { display: none !important; }
   .photo-source-btns { flex-direction: column; }
   .fab-add-btn { bottom: 20px; right: 16px; }
 }
+
+/* ============================================================
+   ===== НОВЫЕ ВОЗМОЖНОСТИ: "Должно быть" + Отчёты =====
+============================================================ */
+
+/* ---------- Активные пункты сайдбара (drawer-nav) ---------- */
+.drawer-nav-item {
+  position: relative;
+}
+.drawer-nav-item.active {
+  background: var(--accent-subtle);
+}
+.drawer-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+.drawer-nav-item.active .drawer-item__label {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* ---------- Подсказка в заголовке секции (target) ---------- */
+.title-hint {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface2);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.2px;
+  vertical-align: middle;
+}
+
+/* ---------- Поле "Должно быть" — оранжевый акцент ---------- */
+.branch-qty-item--target label {
+  color: #b96b06;
+}
+.qty-input--target {
+  border-color: #f7c97a !important;
+  background: #fffaf2 !important;
+  color: #8a4d04 !important;
+  font-weight: 800;
+}
+.qty-input--target:focus {
+  border-color: var(--warning) !important;
+  background: #fff !important;
+  box-shadow: 0 0 0 3px rgba(247, 166, 30, 0.18) !important;
+}
+
+/* ---------- Подсказка под полем остатка (например "норма: 20") ---------- */
+.branch-qty-target-hint {
+  display: block;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 6px;
+  min-height: 14px;
+  line-height: 1.2;
+}
+.branch-qty-target-hint.hint-low {
+  color: var(--danger);
+}
+.branch-qty-target-hint.hint-ok {
+  color: var(--success);
+}
+
+/* ---------- Read-only "Должно быть" для сотрудника ---------- */
+.staff-target-info {
+  background: linear-gradient(135deg, #fff7e6 0%, #fff2db 100%);
+  border: 1.5px solid #f7c97a;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.staff-target-info__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.staff-target-info__icon { font-size: 18px; }
+.staff-target-info__label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #8a4d04;
+}
+.staff-target-info__value {
+  font-size: 18px;
+  font-weight: 800;
+  color: #b96b06;
+  margin-left: auto;
+  background: #fff;
+  padding: 3px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #f7c97a;
+}
+.staff-target-info__hint {
+  font-size: 12px;
+  color: #a36420;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* ---------- Бейдж "Должно быть" на карточке товара ---------- */
+.product-card__target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #fff7e6 0%, #fff2db 100%);
+  border: 1px solid #f7c97a;
+  border-radius: var(--radius-sm);
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8a4d04;
+}
+.product-card__target--miss {
+  background: linear-gradient(135deg, #fdecec 0%, #fbdbdb 100%);
+  border-color: #f0a0a0;
+  color: var(--danger);
+}
+.product-card__target-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.product-card__target-value {
+  font-size: 13px;
+  font-weight: 800;
+}
+.branch-row__target {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: #fff7e6;
+  color: #8a4d04;
+  border-radius: var(--radius-xs);
+  font-size: 10.5px;
+  font-weight: 700;
+  border: 1px solid #f7c97a;
+}
+
+/* ============================================================
+   ===== СИСТЕМА СТРАНИЦ =====
+============================================================ */
+.page {
+  display: none;
+}
+.page.active {
+  display: block;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  margin: 0 0 16px 0;
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--border-light);
+}
+.page-header__icon {
+  font-size: 32px;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius);
+  background: var(--accent-light);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.page-header__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+  letter-spacing: -0.3px;
+}
+.page-header__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ============================================================
+   ===== СТРАНИЦА ОТЧЁТОВ =====
+============================================================ */
+.reports-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.reports-summary-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-xs);
+}
+.reports-summary-card__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.reports-summary-card__value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+.reports-summary-card__value--accent { color: var(--accent); }
+.reports-summary-card__value--warning { color: var(--warning); }
+.reports-summary-card__value--success { color: var(--success); }
+.reports-summary-card__value--danger { color: var(--danger); }
+
+/* ---------- Фильтры по филиалам в отчётах ---------- */
+.reports-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding: 4px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.reports-filters::-webkit-scrollbar { display: none; }
+
+.reports-filter-btn {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+}
+.reports-filter-btn:hover {
+  background: var(--surface2);
+  color: var(--text-primary);
+}
+.reports-filter-btn.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(24, 119, 242, 0.25);
+}
+
+/* ---------- Список карточек отчётов ---------- */
+.reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  padding: 14px;
+  box-shadow: var(--shadow-xs);
+  animation: reportFadeIn 0.3s ease backwards;
+}
+@keyframes reportFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.report-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.report-card__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: var(--accent-light);
+  flex-shrink: 0;
+}
+.report-card__icon--qty { background: #e7f0fd; }
+.report-card__icon--photo { background: #f3e7fd; }
+.report-card__icon--add { background: #edf7eb; }
+.report-card__icon--edit { background: #fff7e6; }
+.report-card__icon--delete { background: #fdecec; }
+.report-card__icon--target { background: #fff2db; }
+
+.report-card__user {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.report-card__branch {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  background: var(--accent-light);
+  color: var(--accent);
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.report-card__time {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.report-card__body {
+  padding-left: 48px;
+}
+.report-card__action {
+  font-size: 13.5px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+.report-card__product {
+  font-weight: 700;
+  color: var(--accent);
+}
+.report-card__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface2);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  flex-wrap: wrap;
+}
+.report-card__change-arrow {
+  color: var(--text-muted);
+}
+.report-card__change-old {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+.report-card__change-new {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+.report-card__change-target {
+  color: #b96b06;
+  font-weight: 700;
+}
+.report-card__change--miss .report-card__change-new {
+  color: var(--danger);
+}
+
+/* ---------- Бейдж "не хватает" / "норма" ---------- */
+.deficit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+}
+.deficit-badge--miss {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+.deficit-badge--ok {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+/* ============================================================
+   ===== АДАПТАЦИЯ К МОБИЛЬНЫМ =====
+============================================================ */
+@media (max-width: 600px) {
+  .page-header { padding: 12px 14px; }
+  .page-header__icon { width: 44px; height: 44px; font-size: 26px; }
+  .page-header__title { font-size: 16px; }
+  .page-header__sub { font-size: 12px; }
+
+  .reports-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .reports-summary-card { padding: 12px; }
+  .reports-summary-card__value { font-size: 18px; }
+
+  .report-card__body { padding-left: 0; margin-top: 6px; }
+  .report-card__time { width: 100%; margin-left: 0; margin-top: 2px; }
+
+  .staff-target-info__value {
+    margin-left: 0;
+    margin-top: 4px;
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ============================================================
+   ===== ГАЛЕРЕЯ =====
+============================================================ */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.gallery-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: transform var(--t-fast), box-shadow var(--t-fast);
+  animation: galleryFadeIn 0.3s ease backwards;
+}
+.gallery-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.gallery-card__image-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.gallery-card__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gallery-card__branch-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: var(--radius-full);
+}
+.gallery-card__body {
+  padding: 10px 12px;
+}
+.gallery-card__name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+.gallery-card__date {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@keyframes galleryFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Lightbox: просмотр фото на весь экран ---------- */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 9000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.lightbox-overlay.active {
+  display: flex;
+  animation: galleryFadeIn 0.2s ease;
+}
+.lightbox-content {
+  max-width: 95vw;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.lightbox-content img {
+  max-width: 100%;
+  max-height: 75vh;
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  object-fit: contain;
+}
+.lightbox-info {
+  background: rgba(255, 255, 255, 0.05);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 90vw;
+}
+.lightbox-info__name {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.lightbox-info__meta {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+}
+.lightbox-close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: none;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background var(--t-fast);
+  z-index: 10;
+}
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.lightbox-close svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---------- Действия в модалке редактирования аккаунта ---------- */
+.ue-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  align-items: stretch;
+}
+.ue-actions .btn-delete-inline {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0;
+  padding: 9px 14px;
+}
+.ue-actions .btn-save {
+  flex: 1;
+}
+
+/* ---------- Адаптация ---------- */
+@media (max-width: 600px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .gallery-card__name { font-size: 12.5px; }
+
+  .ue-actions { flex-direction: column-reverse; }
+  .ue-actions .btn-delete-inline { width: 100%; }
+}
