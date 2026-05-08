@@ -116,7 +116,17 @@
         </div>
       </div>
       <div class="auth-error" id="ueError" style="margin-top:8px"></div>
-      <button class="btn-save btn-save--full" id="ueSubmitBtn" style="margin-top:14px">Сохранить</button>
+
+      <div class="ue-actions">
+        <button class="btn-delete-inline" id="ueDeleteBtn" style="display:none;margin-top:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/>
+          </svg>
+          Удалить аккаунт
+        </button>
+        <button class="btn-save btn-save--full" id="ueSubmitBtn" style="margin-top:0">Сохранить</button>
+      </div>
     </div>
   </div>
 
@@ -221,6 +231,34 @@
       <div class="drawer-sync" id="drawerSync">
         <span id="drawerSyncDot" class="drawer-sync__dot"></span>
         <span id="drawerSyncText">Подключение...</span>
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section__title">Навигация</div>
+
+        <button class="drawer-item drawer-nav-item active" data-page="products">
+          <span class="drawer-item__icon">📦</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Товары</span>
+            <span class="drawer-item__sub">Остатки и каталог</span>
+          </span>
+        </button>
+
+        <button class="drawer-item drawer-nav-item" data-page="gallery">
+          <span class="drawer-item__icon">🖼️</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Галерея</span>
+            <span class="drawer-item__sub" id="drawerGallerySub">Фото товаров</span>
+          </span>
+        </button>
+
+        <button class="drawer-item drawer-nav-item" data-page="reports" id="drawerReportsBtn" style="display:none">
+          <span class="drawer-item__icon">📊</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Отчёты</span>
+            <span class="drawer-item__sub">История изменений</span>
+          </span>
+        </button>
       </div>
 
       <div class="drawer-section">
@@ -412,8 +450,8 @@
     </div>
   </div>
 
-  <!-- ===== MAIN GRID ===== -->
-  <main class="main" id="mainContent" style="display:none">
+  <!-- ===== PAGE: PRODUCTS (главная страница) ===== -->
+  <main class="main page page--products active" id="pageProducts" style="display:none">
     <div class="products-grid" id="productsGrid"></div>
     <div class="empty-state" id="emptyState" style="display:none;">
       <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -425,6 +463,89 @@
       <span>Попробуйте изменить фильтры</span>
     </div>
   </main>
+
+  <!-- ===== PAGE: REPORTS (только для менеджера) ===== -->
+  <main class="main page page--reports" id="pageReports" style="display:none">
+    <div class="page-header">
+      <div class="page-header__icon">📊</div>
+      <div class="page-header__text">
+        <h2 class="page-header__title">Отчёты по товарам</h2>
+        <p class="page-header__sub">История изменения остатков сотрудниками филиалов</p>
+      </div>
+    </div>
+
+    <!-- Сводка -->
+    <div class="reports-summary" id="reportsSummary"></div>
+
+    <!-- Фильтры по филиалу -->
+    <div class="reports-filters" id="reportsFilters">
+      <button class="reports-filter-btn active" data-rfilter="all">🏢 Все филиалы</button>
+      <button class="reports-filter-btn" data-rfilter="branch1">🏪 Сибирский</button>
+      <button class="reports-filter-btn" data-rfilter="branch2">🏪 Фреско</button>
+      <button class="reports-filter-btn" data-rfilter="branch3">🏪 Гелион</button>
+    </div>
+
+    <!-- Список отчётов -->
+    <div class="reports-list" id="reportsList"></div>
+
+    <div class="empty-state" id="reportsEmpty" style="display:none">
+      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="14" y="10" width="52" height="60" rx="6" stroke="#ccc" stroke-width="3"/>
+        <line x1="24" y1="26" x2="56" y2="26" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
+        <line x1="24" y1="38" x2="56" y2="38" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
+        <line x1="24" y1="50" x2="44" y2="50" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <p>Пока нет отчётов</p>
+      <span>Когда сотрудники филиалов будут вносить остатки — записи появятся здесь</span>
+    </div>
+  </main>
+
+  <!-- ===== PAGE: GALLERY ===== -->
+  <main class="main page page--gallery" id="pageGallery" style="display:none">
+    <div class="page-header">
+      <div class="page-header__icon">🖼️</div>
+      <div class="page-header__text">
+        <h2 class="page-header__title">Галерея фото товаров</h2>
+        <p class="page-header__sub" id="galleryPageSub">Все фотографии, загруженные с филиалов</p>
+      </div>
+    </div>
+
+    <!-- Фильтры галереи (только менеджер видит фильтры по филиалам) -->
+    <div class="reports-filters" id="galleryFilters" style="display:none">
+      <button class="reports-filter-btn active" data-gfilter="all">🏢 Все филиалы</button>
+      <button class="reports-filter-btn" data-gfilter="branch1">🏪 Сибирский</button>
+      <button class="reports-filter-btn" data-gfilter="branch2">🏪 Фреско</button>
+      <button class="reports-filter-btn" data-gfilter="branch3">🏪 Гелион</button>
+    </div>
+
+    <div class="gallery-grid" id="galleryGrid"></div>
+
+    <div class="empty-state" id="galleryEmpty" style="display:none">
+      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="14" width="60" height="50" rx="6" stroke="#ccc" stroke-width="3"/>
+        <circle cx="28" cy="32" r="5" stroke="#ccc" stroke-width="3"/>
+        <path d="M14 60l18-18 14 14 8-8 12 12" stroke="#ccc" stroke-width="3" stroke-linejoin="round"/>
+      </svg>
+      <p>Пока нет фотографий</p>
+      <span>Загрузите фото товара — оно появится здесь с указанием даты и филиала</span>
+    </div>
+  </main>
+
+  <!-- ===== LIGHTBOX (просмотр фото на весь экран) ===== -->
+  <div class="lightbox-overlay" id="lightboxOverlay">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    <div class="lightbox-content">
+      <img id="lightboxImg" src="" alt=""/>
+      <div class="lightbox-info">
+        <div class="lightbox-info__name" id="lightboxName"></div>
+        <div class="lightbox-info__meta" id="lightboxMeta"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== FAB: кнопка + для сотрудника ===== -->
   <button class="fab-add-btn" id="fabAddBtn" style="display:none" aria-label="Добавить товар">
@@ -496,8 +617,55 @@
         </div>
       </div>
 
+      <!-- ===== ДОЛЖНО БЫТЬ — только менеджер ===== -->
+      <div class="branches-qty-section" id="targetSection">
+        <h3 class="branches-qty-title">
+          🎯 Должно быть (норма по филиалам)
+          <span class="title-hint">только менеджер</span>
+        </h3>
+        <div class="branches-qty-grid">
+          <div class="branch-qty-item branch-qty-item--target" data-branch="branch1">
+            <label>Сибирский</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="target1">−</button>
+              <input type="number" id="target1" class="qty-input qty-input--target" value="0" min="0" inputmode="numeric"/>
+              <button class="qty-btn" data-action="plus" data-target="target1">+</button>
+            </div>
+          </div>
+          <div class="branch-qty-item branch-qty-item--target" data-branch="branch2">
+            <label>Фреско</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="target2">−</button>
+              <input type="number" id="target2" class="qty-input qty-input--target" value="0" min="0" inputmode="numeric"/>
+              <button class="qty-btn" data-action="plus" data-target="target2">+</button>
+            </div>
+          </div>
+          <div class="branch-qty-item branch-qty-item--target" data-branch="branch3">
+            <label>Гелион</label>
+            <div class="qty-stepper">
+              <button class="qty-btn" data-action="minus" data-target="target3">−</button>
+              <input type="number" id="target3" class="qty-input qty-input--target" value="0" min="0" inputmode="numeric"/>
+              <button class="qty-btn" data-action="plus" data-target="target3">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ПОДСКАЗКА "ДОЛЖНО БЫТЬ" — только сотрудник ===== -->
+      <div class="staff-target-info" id="staffTargetInfo" style="display:none">
+        <div class="staff-target-info__head">
+          <span class="staff-target-info__icon">🎯</span>
+          <span class="staff-target-info__label">Должно быть в наличии:</span>
+          <span class="staff-target-info__value" id="staffTargetValue">— шт</span>
+        </div>
+        <div class="staff-target-info__hint">
+          Это значение задано менеджером. Введите ниже фактический остаток на вашем филиале.
+        </div>
+      </div>
+
+      <!-- ===== ОСТАТОК (фактически) ===== -->
       <div class="branches-qty-section">
-        <h3 class="branches-qty-title" id="branchesQtyTitle">Остатки по филиалам (шт)</h3>
+        <h3 class="branches-qty-title" id="branchesQtyTitle">📦 Остаток (фактически, шт)</h3>
         <div class="branches-qty-grid" id="branchesQtyGrid">
           <div class="branch-qty-item" data-branch="branch1">
             <label>Сибирский</label>
@@ -506,6 +674,7 @@
               <input type="number" id="qty1" class="qty-input" value="0" min="0" inputmode="numeric"/>
               <button class="qty-btn" data-action="plus" data-target="qty1">+</button>
             </div>
+            <div class="branch-qty-target-hint" id="qty1Hint"></div>
           </div>
           <div class="branch-qty-item" data-branch="branch2">
             <label>Фреско</label>
@@ -514,6 +683,7 @@
               <input type="number" id="qty2" class="qty-input" value="0" min="0" inputmode="numeric"/>
               <button class="qty-btn" data-action="plus" data-target="qty2">+</button>
             </div>
+            <div class="branch-qty-target-hint" id="qty2Hint"></div>
           </div>
           <div class="branch-qty-item" data-branch="branch3">
             <label>Гелион</label>
@@ -522,6 +692,7 @@
               <input type="number" id="qty3" class="qty-input" value="0" min="0" inputmode="numeric"/>
               <button class="qty-btn" data-action="plus" data-target="qty3">+</button>
             </div>
+            <div class="branch-qty-target-hint" id="qty3Hint"></div>
           </div>
         </div>
       </div>
@@ -563,6 +734,25 @@
       <div class="confirm-btns">
         <button class="btn-cancel" id="confirmCancelBtn">Отмена</button>
         <button class="btn-delete-confirm" id="confirmDeleteBtn">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CONFIRM DELETE ACCOUNT ===== -->
+  <div class="modal-overlay" id="accountDeleteModal">
+    <div class="modal modal--confirm">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="24" cy="24" r="20" fill="#FF3B30" opacity="0.1" stroke="#FF3B30" stroke-width="2"/>
+          <line x1="24" y1="14" x2="24" y2="28" stroke="#FF3B30" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="24" cy="34" r="2" fill="#FF3B30"/>
+        </svg>
+      </div>
+      <h2>Удалить аккаунт?</h2>
+      <p id="accountDeleteText">Сотрудник этого филиала будет немедленно разлогинен и не сможет войти, пока вы не создадите аккаунт заново.</p>
+      <div class="confirm-btns">
+        <button class="btn-cancel" id="accountDeleteCancelBtn">Отмена</button>
+        <button class="btn-delete-confirm" id="accountDeleteConfirmBtn">Удалить</button>
       </div>
     </div>
   </div>
