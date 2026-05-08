@@ -44,7 +44,7 @@ const db           = getDatabase(firebaseApp);
 const PRODUCTS_REF = ref(db, 'products');
 const ACCOUNTS_REF = ref(db, 'accounts');
 const LOGS_REF     = ref(db, 'logs');
-const PHOTOS_REF   = ref(db, 'photoHistory'); // история загруженных фото для галереи
+const PROOFS_REF   = ref(db, 'proofs'); // отчёты сотрудников с фото-доказательствами
 
 /* ===========================================================
    КОНСТАНТЫ
@@ -53,7 +53,7 @@ const STORAGE_KEY    = 'mone_products_v2';
 const SESSION_KEY    = 'mone_session_v2';
 const ACCOUNTS_CACHE = 'mone_accounts_v2';
 const LOGS_CACHE     = 'mone_logs_v2';
-const PHOTOS_CACHE   = 'mone_photos_v2';
+const PROOFS_CACHE   = 'mone_proofs_v2';
 
 const CATEGORY_LABELS = {
   drinks:     'Напитки',
@@ -62,21 +62,30 @@ const CATEGORY_LABELS = {
   cleaning:   'Чистящие средства',
   other:      'Прочее',
 };
+const CATEGORY_EMOJI = {
+  drinks:     '🥤',
+  disposable: '🍴',
+  food:       '🍞',
+  cleaning:   '🧴',
+  other:      '📦',
+};
 
 const BRANCH_LABELS = { branch1: 'Сибирский', branch2: 'Фреско', branch3: 'Гелион' };
+const BRANCH_FULL_LABELS = { branch1: 'Сибирский филиал', branch2: 'Фреско филиал', branch3: 'Гелион филиал' };
 const BRANCH_KEYS   = ['branch1', 'branch2', 'branch3'];
 const ROLE_LABELS   = { manager: 'Менеджер', staff: 'Сотрудник филиала' };
 
 const LOG_TYPES = {
-  login:      { icon: '🔑', label: 'Вход в систему' },
-  logout:     { icon: '🚪', label: 'Выход из системы' },
-  add:        { icon: '➕', label: 'Добавление товара' },
-  edit:       { icon: '✏️', label: 'Редактирование товара' },
-  delete:     { icon: '🗑️', label: 'Удаление товара' },
-  qtyEdit:    { icon: '🔢', label: 'Изменение количества' },
-  photoEdit:  { icon: '📷', label: 'Изменение фото' },
-  userEdit:   { icon: '👤', label: 'Изменение аккаунта' },
-  targetEdit: { icon: '🎯', label: 'Изменение нормы' },
+  login:       { icon: '🔑', label: 'Вход в систему' },
+  logout:      { icon: '🚪', label: 'Выход из системы' },
+  add:         { icon: '➕', label: 'Добавление товара' },
+  edit:        { icon: '✏️', label: 'Редактирование товара' },
+  delete:      { icon: '🗑️', label: 'Удаление товара' },
+  qtyEdit:     { icon: '🔢', label: 'Изменение количества' },
+  photoEdit:   { icon: '📷', label: 'Изменение фото' },
+  userEdit:    { icon: '👤', label: 'Изменение аккаунта' },
+  targetEdit:  { icon: '🎯', label: 'Изменение нормы' },
+  proofSubmit: { icon: '📸', label: 'Отчёт-доказательство' },
 };
 
 let renderToken = 0;
@@ -130,14 +139,13 @@ function getDefaultAccounts() {
 }
 
 function getDefaultProducts() {
-  // targets — норма (сколько должно быть), задаёт менеджер
   return [
-    { id: uid(), name: 'Pepsi 0.5л',                category: 'drinks',     description: 'Газированный напиток Pepsi, бутылка 0.5 литра', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  }, targets: { branch1: 30, branch2: 30, branch3: 30 } },
-    { id: uid(), name: 'Coca-Cola 1л',              category: 'drinks',     description: 'Классическая Кока-Кола, бутылка 1 литр',         photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 }, targets: { branch1: 20, branch2: 20, branch3: 20 } },
-    { id: uid(), name: 'Пластиковые стаканы 250мл', category: 'disposable', description: 'Одноразовые стаканы',                              photo: null, branches: { branch1: 5,  branch2: 2,  branch3: 0  }, targets: { branch1: 50, branch2: 50, branch3: 50 } },
-    { id: uid(), name: 'Трубочки для коктейлей',    category: 'disposable', description: 'Пластиковые трубочки',                             photo: null, branches: { branch1: 3,  branch2: 0,  branch3: 1  }, targets: { branch1: 30, branch2: 30, branch3: 30 } },
-    { id: uid(), name: 'Сахар',                     category: 'food',       description: 'Сахар-песок',                                      photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  }, targets: { branch1: 15, branch2: 15, branch3: 15 } },
-    { id: uid(), name: 'Fairy 500мл',               category: 'cleaning',   description: 'Средство для мытья посуды Fairy',                  photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  }, targets: { branch1: 6,  branch2: 6,  branch3: 6  } },
+    { id: uid(), name: 'Вилки металлические', category: 'disposable', description: '', photo: null, branches: { branch1: 19, branch2: 22, branch3: 18 }, targets: { branch1: 22, branch2: 22, branch3: 22 } },
+    { id: uid(), name: 'Ложки металлические', category: 'disposable', description: '', photo: null, branches: { branch1: 22, branch2: 20, branch3: 22 }, targets: { branch1: 22, branch2: 22, branch3: 22 } },
+    { id: uid(), name: 'Pepsi 0.5л',          category: 'drinks',     description: '', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  }, targets: { branch1: 30, branch2: 30, branch3: 30 } },
+    { id: uid(), name: 'Coca-Cola 1л',        category: 'drinks',     description: '', photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 }, targets: { branch1: 20, branch2: 20, branch3: 20 } },
+    { id: uid(), name: 'Сахар',               category: 'food',       description: '', photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  }, targets: { branch1: 15, branch2: 15, branch3: 15 } },
+    { id: uid(), name: 'Fairy 500мл',         category: 'cleaning',   description: '', photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  }, targets: { branch1: 6,  branch2: 6,  branch3: 6  } },
   ];
 }
 
@@ -148,7 +156,7 @@ const state = {
   products:         [],
   accounts:         [],
   logs:             [],
-  photoHistory:     [],
+  proofs:           [],
   activeBranch:     'all',
   stockFilter:      'all',
   sortMode:         'smart',
@@ -156,13 +164,17 @@ const state = {
   pendingDeleteAccountId: null,
   editingProductId: null,
   editingUserId:    null,
+  proofProductId:   null,
   photoDataUrl:     null,
+  proofPhotoDataUrl: null,
   firebaseLoaded:   false,
   currentUser:      null,
   validatedSession: false,
   currentPage:      'products', // products | gallery | reports
-  reportsFilter:    'all',
   galleryFilter:    'all',
+  reportsBranchFilter: 'all',
+  reportsCategoryFilter: 'all',
+  reportsSearchQuery: '',
 };
 
 /* ===========================================================
@@ -241,13 +253,44 @@ function getTarget(product, branch = 'all') {
 function formatRelative(ts) {
   const diff = Date.now() - ts;
   const min  = Math.floor(diff / 60000);
-  if (min < 1)   return 'только что';
-  if (min < 60)  return `${min} мин назад`;
+  if (min < 1)  return 'только что';
+  if (min < 60) return `${min} мин назад`;
   const h = Math.floor(min / 60);
-  if (h < 24)    return `${h} ч назад`;
+  if (h < 24)   return `${h} ч назад`;
   const d = Math.floor(h / 24);
-  if (d < 7)     return `${d} д назад`;
+  if (d < 7)    return `${d} д назад`;
   return new Date(ts).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Возвращает ключ-группу: "today", "yesterday" или "YYYY-MM-DD"
+function getDateGroupKey(ts) {
+  const d = new Date(ts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const date  = new Date(d); date.setHours(0,0,0,0);
+  const dayMs = 24*60*60*1000;
+  if (date.getTime() === today.getTime()) return 'today';
+  if (date.getTime() === today.getTime() - dayMs) return 'yesterday';
+  // YYYY-MM-DD для прочих
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+// Человеко-читаемое название группы
+function formatDateGroupLabel(key) {
+  if (key === 'today')     return '📅 Сегодня';
+  if (key === 'yesterday') return '📅 Вчера';
+  // YYYY-MM-DD → красивая русская дата
+  const [y, m, d] = key.split('-');
+  const dt = new Date(+y, +m - 1, +d);
+  return '📅 ' + dt.toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
 }
 
 function getStockStatus(qty) {
@@ -291,9 +334,10 @@ function initFirebaseListeners() {
   onValue(PRODUCTS_REF, (snap) => {
     const data = snap.val();
     state.products = data ? Object.values(data) : [];
-    // Миграция: добавляем targets если отсутствует (для старых товаров)
+    // Миграция: добавляем targets и category для старых товаров
     state.products.forEach(p => {
-      if (!p.targets) p.targets = { branch1: 0, branch2: 0, branch3: 0 };
+      if (!p.targets)  p.targets  = { branch1: 0, branch2: 0, branch3: 0 };
+      if (!p.category) p.category = 'other';
     });
     saveLocal(STORAGE_KEY, state.products);
     state.firebaseLoaded = true;
@@ -304,7 +348,8 @@ function initFirebaseListeners() {
     if (!state.firebaseLoaded) {
       state.products = loadLocal(STORAGE_KEY) || [];
       state.products.forEach(p => {
-        if (!p.targets) p.targets = { branch1: 0, branch2: 0, branch3: 0 };
+        if (!p.targets)  p.targets  = { branch1: 0, branch2: 0, branch3: 0 };
+        if (!p.category) p.category = 'other';
       });
       state.firebaseLoaded = true;
       renderAll();
@@ -331,23 +376,25 @@ function initFirebaseListeners() {
       state.logs = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
       saveLocal(LOGS_CACHE, state.logs);
       renderManagerLogs();
-      if (state.currentPage === 'reports') renderReportsPage();
     }, () => {
       state.logs = loadLocal(LOGS_CACHE) || [];
       renderManagerLogs();
-      if (state.currentPage === 'reports') renderReportsPage();
     });
   }
 
-  // История фотографий — для галереи. Видят все (на стороне клиента staff фильтруется по своему филиалу).
-  onValue(PHOTOS_REF, (snap) => {
+  // Proofs — отчёты-доказательства, видят все, но staff фильтруется на клиенте
+  onValue(PROOFS_REF, (snap) => {
     const data = snap.val();
-    state.photoHistory = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
-    saveLocal(PHOTOS_CACHE, state.photoHistory);
+    state.proofs = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
+    saveLocal(PROOFS_CACHE, state.proofs);
     if (state.currentPage === 'gallery') renderGalleryPage();
+    if (state.currentPage === 'reports') renderReportsPage();
+    renderAll(); // обновим карточки товаров (показ "последний отчёт")
   }, () => {
-    state.photoHistory = loadLocal(PHOTOS_CACHE) || [];
+    state.proofs = loadLocal(PROOFS_CACHE) || [];
     if (state.currentPage === 'gallery') renderGalleryPage();
+    if (state.currentPage === 'reports') renderReportsPage();
+    renderAll();
   });
 }
 
@@ -413,9 +460,9 @@ async function fbClearLogs() {
   catch (e) { console.error('Clear logs error:', e); }
 }
 
-async function fbAddPhotoHistory(entry) {
-  try { await set(ref(db, `photoHistory/${entry.id}`), entry); }
-  catch (e) { console.error('Photo history error:', e); }
+async function fbAddProof(entry) {
+  try { await set(ref(db, `proofs/${entry.id}`), entry); }
+  catch (e) { console.error('Add proof error:', e); throw e; }
 }
 
 async function fbDeleteAccount(id) {
@@ -578,14 +625,16 @@ function enterApp() {
     initFilters();
     initFilterModal();
     initPhotoUpload();
+    initProofPhotoUpload();
     initSteppers();
     initProductEvents();
+    initProofEvents();
     initManagerPanel();
     initUserChip();
     initMobileUI();
     initPageNavigation();
-    initReportsEvents();
     initGalleryEvents();
+    initReportsEvents();
     initLightbox();
     enterApp._initialized = true;
   }
@@ -625,23 +674,23 @@ async function handleLogout() {
 function applyRoleVisibility() {
   const manager = isManager();
 
-  // Менеджер — панель менеджера
   $('addProductBtn').style.display    = manager ? '' : 'none';
   $('managerPanelBtn').style.display  = manager ? '' : 'none';
-  $('drawerAddBtn').style.display     = ''; // видно всем — и менеджеру, и сотруднику
+  $('drawerAddBtn').style.display     = manager ? '' : 'none'; // добавлять может только менеджер
   $('drawerManagerBtn').style.display = manager ? '' : 'none';
-  $('drawerReportsBtn').style.display = manager ? '' : 'none'; // отчёты — только менеджер
+  $('drawerReportsBtn').style.display = manager ? '' : 'none';
+  $('drawerExcelBtn').style.display   = manager ? '' : 'none';
 
-  // Сотрудник — FAB кнопка «+»
+  // Сотрудник — никаких FAB (он работает только через "Доказать")
   const fab = $('fabAddBtn');
-  if (fab) fab.style.display = manager ? 'none' : 'flex';
+  if (fab) fab.style.display = 'none';
 
   // Переключение филиалов — только менеджер
   $('branches').style.display        = manager ? '' : 'none';
   $('drawerBranchBtn').style.display = manager ? '' : 'none';
   $('branchIndicator').style.display = manager ? '' : 'none';
 
-  // Фильтры галереи по филиалам — только менеджеру (сотрудник видит только свой филиал)
+  // Фильтры галереи — только у менеджера; staff видит свой филиал
   const gFilters = $('galleryFilters');
   if (gFilters) gFilters.style.display = manager ? 'flex' : 'none';
 
@@ -704,6 +753,7 @@ function initDrawer() {
   $('drawerBranchBtn').addEventListener('click', () => { close(); setTimeout(openBranchModal, 200); });
   $('drawerAddBtn').addEventListener('click',    () => { close(); setTimeout(() => openEditModal(null), 200); });
   $('drawerPrintBtn').addEventListener('click',  () => { close(); setTimeout(preparePrint, 200); });
+  $('drawerExcelBtn').addEventListener('click',  () => { close(); setTimeout(exportToExcel, 200); });
   $('drawerManagerBtn').addEventListener('click',() => { close(); setTimeout(openManagerPanel, 200); });
   $('drawerLogoutBtn').addEventListener('click', () => { close(); setTimeout(handleLogout, 200); });
 
@@ -819,7 +869,6 @@ function initManagerPanel() {
     await fbClearLogs();
     state.logs = [];
     renderManagerLogs();
-    if (state.currentPage === 'reports') renderReportsPage();
     showToast('✓ Журнал очищен');
   });
 
@@ -833,20 +882,14 @@ function initManagerPanel() {
   });
   $('ueSubmitBtn').addEventListener('click', handleUserEditSubmit);
 
-  // Кнопка "Удалить аккаунт" в модалке редактирования
+  // Кнопка "Удалить аккаунт"
   $('ueDeleteBtn').addEventListener('click', () => {
     const accId = state.editingUserId;
     if (!accId) return;
     const acc = state.accounts.find(a => a.id === accId);
     if (!acc) return;
-    if (acc.role === 'manager') {
-      showToast('⛔ Нельзя удалить аккаунт менеджера', 'error');
-      return;
-    }
-    if (acc.id === state.currentUser.id) {
-      showToast('⛔ Нельзя удалить собственный аккаунт', 'error');
-      return;
-    }
+    if (acc.role === 'manager') { showToast('⛔ Нельзя удалить аккаунт менеджера', 'error'); return; }
+    if (acc.id === state.currentUser.id) { showToast('⛔ Нельзя удалить собственный аккаунт', 'error'); return; }
     state.pendingDeleteAccountId = accId;
     $('accountDeleteText').textContent =
       `Аккаунт «${acc.name}» (логин: ${acc.username}) будет удалён. ` +
@@ -855,7 +898,6 @@ function initManagerPanel() {
     setTimeout(() => openOverlay($('accountDeleteModal')), 100);
   });
 
-  // Подтверждение удаления аккаунта
   $('accountDeleteCancelBtn').addEventListener('click', () => {
     closeOverlay($('accountDeleteModal'));
     state.pendingDeleteAccountId = null;
@@ -876,8 +918,9 @@ function initManagerPanel() {
     await fbDeleteAccount(accId);
     await writeLog('userEdit', `Удалён аккаунт: ${acc.name} (@${acc.username})`);
     showToast(`✓ Аккаунт «${acc.name}» удалён`);
-    // После удаления при следующем onValue(ACCOUNTS_REF) у удалённого
-    // пользователя сработает revalidateCurrentSession → forceLogout.
+    // У удалённого пользователя через onValue(ACCOUNTS_REF) сработает
+    // revalidateCurrentSession → forceLogout. Заново войти не сможет, пока
+    // менеджер не создаст новый аккаунт.
   });
 }
 
@@ -957,7 +1000,7 @@ function openUserEditModal(accId) {
   $('uePassword').value = '';
   $('ueError').textContent = '';
 
-  // Кнопка "Удалить аккаунт": только для филиалов и не для себя
+  // Кнопка удаления — только для филиалов и не для себя
   const delBtn = $('ueDeleteBtn');
   if (delBtn) {
     const canDelete = acc.role !== 'manager' && acc.id !== state.currentUser.id;
@@ -1030,7 +1073,7 @@ function renderManagerLogs() {
 
   list.innerHTML = state.logs.slice(0, 200).map(log => {
     const info = LOG_TYPES[log.type] || { icon: '📌', label: log.type };
-    const cssClass = ['add','edit','delete','login','logout','qtyEdit','photoEdit','userEdit','targetEdit'].includes(log.type)
+    const cssClass = ['add','edit','delete','login','logout','qtyEdit','photoEdit','userEdit','targetEdit','proofSubmit'].includes(log.type)
       ? 'log-' + log.type.toLowerCase()
       : 'log-other';
     const branchTag = log.branch ? `<span class="log-branch-tag">${BRANCH_LABELS[log.branch] || log.branch}</span>` : '';
@@ -1234,8 +1277,22 @@ function renderAll() {
   $('emptyState').style.display = 'none';
   $('productsGrid').innerHTML = list.map((p, i) => buildCard(p, i)).join('');
   $('productsGrid').querySelectorAll('.product-card').forEach(card => {
-    // Клик на карточку → сразу открываем форму редактирования
-    card.addEventListener('click', () => openEditModal(card.dataset.id));
+    card.addEventListener('click', e => {
+      // Если клик по кнопке "Доказать" — отдельный handler ниже не сработает,
+      // событие сначала обработает кнопка благодаря stopPropagation. Здесь —
+      // дефолтное действие: менеджеру форма редактирования, сотруднику — proof.
+      const id = card.dataset.id;
+      if (isManager()) openEditModal(id);
+      else openProofModal(id);
+    });
+  });
+  // Кнопки "Доказать" — только для сотрудника, останавливаем bubbling
+  $('productsGrid').querySelectorAll('.product-card__prove-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      openProofModal(id);
+    });
   });
 }
 
@@ -1276,23 +1333,25 @@ function buildCard(product, index) {
     }).join('');
   } else {
     const cls = qty === 0 ? 'branch-row__qty--out' : qty <= 3 ? 'branch-row__qty--low' : '';
+    // Для сотрудника — НЕ показываем название филиала (зачем, он его и так видит в шапке)
+    const branchLabel = isManager() ? BRANCH_LABELS[branch] : 'Остаток';
     branchesHtml = `
       <div class="branch-row">
-        <span class="branch-row__label">${BRANCH_LABELS[branch]}</span>
+        <span class="branch-row__label">${branchLabel}</span>
         <span class="branch-row__qty ${cls}">${qty} шт</span>
       </div>`;
   }
 
   const totalText  = showAllBranches ? `${getQty(product)} шт` : `${qty} шт`;
-  const totalLabel = showAllBranches ? 'Итого' : 'Остаток';
+  const totalLabel = showAllBranches ? 'Итого' : 'Сейчас';
 
-  // Бейдж "Должно быть" — показываем когда выбран один филиал и норма задана
+  // Бейдж "Должно быть"
   let targetHtml = '';
   if (!showAllBranches && target > 0) {
     const isMiss = qty < target;
     targetHtml = `
       <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
-        <span class="product-card__target-label">🎯 Норма</span>
+        <span class="product-card__target-label">🎯 Должно быть</span>
         <span class="product-card__target-value">${qty} / ${target}</span>
       </div>`;
   } else if (showAllBranches && getTarget(product) > 0) {
@@ -1306,6 +1365,37 @@ function buildCard(product, index) {
       </div>`;
   }
 
+  // Категория-чип
+  const cat = product.category || 'other';
+  const catHtml = `<div class="product-card__cat-badge">${CATEGORY_EMOJI[cat] || '📦'} ${escHtml(CATEGORY_LABELS[cat] || cat)}</div>`;
+
+  // Последний отчёт от сотрудника моего филиала (для самого сотрудника)
+  let lastProofHtml = '';
+  if (isStaff()) {
+    const myBranch = userBranch();
+    const lastProof = state.proofs.find(pr => pr.productId === product.id && pr.branch === myBranch);
+    if (lastProof) {
+      lastProofHtml = `
+        <div class="product-card__last-proof">
+          <span class="product-card__last-proof-icon">✅</span>
+          <span>Отчёт отправлен ${formatRelative(lastProof.ts)}: ${lastProof.qty} шт</span>
+        </div>`;
+    }
+  }
+
+  // Кнопка "Доказать" — только для сотрудника
+  let proveBtnHtml = '';
+  if (isStaff()) {
+    proveBtnHtml = `
+      <button class="product-card__prove-btn" data-id="${product.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        Доказать остаток
+      </button>`;
+  }
+
   return `
     <div class="product-card ${blink}" data-id="${product.id}" style="animation-delay:${delay}ms">
       <div class="product-card__image-wrap">
@@ -1313,13 +1403,16 @@ function buildCard(product, index) {
         <div class="product-card__badge ${badge.cls}">${badge.label}</div>
       </div>
       <div class="product-card__body">
+        ${catHtml}
         <div class="product-card__name">${escHtml(product.name)}</div>
         <div class="product-card__branches">${branchesHtml}</div>
         ${targetHtml}
+        ${lastProofHtml}
         <div class="product-card__footer">
           <span class="product-card__total-label">${totalLabel}</span>
           <span class="product-card__total-value">${totalText}</span>
         </div>
+        ${proveBtnHtml}
       </div>
     </div>`;
 }
@@ -1328,6 +1421,11 @@ function buildCard(product, index) {
    EDIT MODAL (клик на карточку → форма)
 =========================================================== */
 function openEditModal(productId) {
+  // Сотрудники не могут открывать форму редактирования — для них есть proof модалка
+  if (isStaff()) {
+    openProofModal(productId);
+    return;
+  }
   state.editingProductId = productId || null;
   $('editModalTitle').textContent = productId ? 'Изменить товар' : 'Добавить товар';
 
@@ -1337,11 +1435,15 @@ function openEditModal(productId) {
   $('photoRemoveBtn').style.display   = 'none';
   $('photoInput').value               = '';
 
+  // Скрываем "последний отчёт" — у менеджера показываем только при редактировании
+  $('lastProofInfo').style.display = 'none';
+
   if (productId) {
     const p = state.products.find(pr => pr.id === productId);
     if (!p) return;
-    $('editName').value = p.name;
-    $('editDesc').value = p.description || '';
+    $('editName').value     = p.name;
+    $('editDesc').value     = p.description || '';
+    $('editCategory').value = p.category || 'other';
     $('qty1').value     = p.branches?.branch1 ?? 0;
     $('qty2').value     = p.branches?.branch2 ?? 0;
     $('qty3').value     = p.branches?.branch3 ?? 0;
@@ -1355,69 +1457,54 @@ function openEditModal(productId) {
       $('photoPlaceholder').style.display = 'none';
       $('photoRemoveBtn').style.display   = 'block';
     }
-    // Превью для staff
-    $('staffProductName').textContent = p.name;
+    // Показываем последний отчёт от любого филиала по этому товару
+    const lastProof = state.proofs.find(pr => pr.productId === productId);
+    if (lastProof) {
+      const branchLabel = BRANCH_LABELS[lastProof.branch] || lastProof.branch;
+      const photoHtml = lastProof.photo
+        ? `<img src="${lastProof.photo}" alt=""/>`
+        : `<div style="width:100%;height:100%;display:grid;place-items:center;color:var(--text-muted)">📷</div>`;
+      $('lastProofBody').innerHTML = `
+        <div class="last-proof-info__photo" data-proof-id="${escHtml(lastProof.id)}">${photoHtml}</div>
+        <div class="last-proof-info__details">
+          <div><strong>${escHtml(lastProof.userName)}</strong> (${branchLabel})</div>
+          <div>${formatRelative(lastProof.ts)} · ${lastProof.qty} шт${lastProof.target ? ` / норма ${lastProof.target}` : ''}</div>
+          ${lastProof.comment ? `<div style="margin-top:4px;font-style:italic;">«${escHtml(lastProof.comment)}»</div>` : ''}
+        </div>`;
+      $('lastProofInfo').style.display = '';
+      // Клик на фото открывает lightbox
+      const photoEl = $('lastProofBody').querySelector('.last-proof-info__photo');
+      if (photoEl) {
+        photoEl.addEventListener('click', () => openLightbox(lastProof));
+      }
+    }
   } else {
     $('editName').value = '';
     $('editDesc').value = '';
+    $('editCategory').value = 'other';
     $('qty1').value = $('qty2').value = $('qty3').value = '0';
     $('target1').value = $('target2').value = $('target3').value = '0';
-    const sn = $('staffEditName'); if (sn) sn.value = '';
   }
 
-  const manager = isManager();
+  // Менеджер: показываем все поля, скрываем staff-блоки
+  $('managerFields').style.display    = '';
+  $('targetSection').style.display    = '';
+  $('staffProductInfo').style.display = 'none';
+  $('staffNameFieldWrap').style.display = 'none';
+  $('staffTargetInfo').style.display  = 'none';
 
-  // Менеджер: поля названия и описания + раздел "Должно быть"
-  // Сотрудник: при редактировании — только превью имени; при добавлении — поле названия
-  $('managerFields').style.display    = manager ? '' : 'none';
-  $('targetSection').style.display    = manager ? '' : 'none';
-  $('staffProductInfo').style.display = (!manager && productId) ? 'block' : 'none';
-
-  // Поле названия для сотрудника при добавлении нового товара
-  const staffNameFieldWrap = $('staffNameFieldWrap');
-  if (staffNameFieldWrap) {
-    staffNameFieldWrap.style.display = (!manager && !productId) ? '' : 'none';
-  }
-
-  // Подсказка "Должно быть" для сотрудника — показывается только если редактируется
-  // существующий товар и норма задана менеджером
-  const staffTargetInfo = $('staffTargetInfo');
-  if (staffTargetInfo) {
-    if (!manager && productId) {
-      const p = state.products.find(pr => pr.id === productId);
-      const myBranch = userBranch();
-      const myTarget = p?.targets?.[myBranch] ?? 0;
-      if (myTarget > 0) {
-        $('staffTargetValue').textContent = `${myTarget} шт`;
-        staffTargetInfo.style.display = '';
-      } else {
-        staffTargetInfo.style.display = 'none';
-      }
-    } else {
-      staffTargetInfo.style.display = 'none';
-    }
-  }
-
-  // Удаление — только менеджер при редактировании
+  // Удаление — только при редактировании
   const delBtn = $('editDeleteBtn');
-  if (delBtn) delBtn.style.display = (manager && productId) ? '' : 'none';
+  if (delBtn) delBtn.style.display = productId ? '' : 'none';
 
-  // Поля кол-ва: staff видит только свой филиал
+  // Все поля количества видны менеджеру
   document.querySelectorAll('#branchesQtyGrid .branch-qty-item').forEach(item => {
-    if (manager) {
-      item.style.display = '';
-    } else {
-      item.style.display = item.dataset.branch === userBranch() ? '' : 'none';
-    }
+    item.style.display = '';
   });
-  $('branchesQtyTitle').textContent = manager
-    ? '📦 Остаток по филиалам (фактически, шт)'
-    : `📦 Остаток (${BRANCH_LABELS[userBranch()] || ''}, шт)`;
+  $('branchesQtyTitle').textContent = '📦 Остаток по филиалам (фактически, шт)';
 
-  // Обновляем подсказки под полями остатков (норма vs факт)
+  // Подсказки норма vs факт
   updateStockHints();
-
-  // Один раз вешаем слушатели на input — для динамической подсказки
   ['qty1','qty2','qty3','target1','target2','target3'].forEach(id => {
     const el = $(id);
     if (el && !el._hintListenerAttached) {
@@ -1427,27 +1514,22 @@ function openEditModal(productId) {
   });
 
   openOverlay($('editModal'));
-  if (manager) setTimeout(() => $('editName').focus(), 200);
-  else if (!productId) setTimeout(() => $('staffEditName')?.focus(), 200);
+  setTimeout(() => $('editName').focus(), 200);
 }
 
 function updateStockHints() {
-  // Под каждым полем остатка пишем "норма: X" (зелёная если хватает, красная если меньше)
   ['1','2','3'].forEach(i => {
     const qtyEl    = $('qty' + i);
     const targetEl = $('target' + i);
     const hintEl   = $('qty' + i + 'Hint');
     if (!qtyEl || !hintEl) return;
-
     const qty    = parseInt(qtyEl.value, 10) || 0;
     const target = parseInt(targetEl?.value, 10) || 0;
-
     if (target <= 0) {
       hintEl.textContent = '';
       hintEl.className = 'branch-qty-target-hint';
       return;
     }
-
     const diff = qty - target;
     if (diff < 0) {
       hintEl.textContent = `⚠ норма: ${target} (не хватает ${Math.abs(diff)})`;
@@ -1460,178 +1542,75 @@ function updateStockHints() {
 }
 
 async function saveProduct() {
+  // Эта функция вызывается только менеджером (форма редактирования товара)
+  if (!isManager()) {
+    showToast('⛔ Только менеджер может редактировать товары', 'error');
+    return;
+  }
+
   const isEdit  = !!state.editingProductId;
-  const manager = isManager();
 
-  if (manager) {
-    const name = $('editName').value.trim();
-    if (!name) {
-      $('editName').style.borderColor = 'var(--danger)';
-      $('editName').focus();
-      showToast('Введите название товара', 'error');
-      return;
-    }
-    $('editName').style.borderColor = '';
+  const name = $('editName').value.trim();
+  if (!name) {
+    $('editName').style.borderColor = 'var(--danger)';
+    $('editName').focus();
+    showToast('Введите название товара', 'error');
+    return;
   }
+  $('editName').style.borderColor = '';
 
-  let original = isEdit ? state.products.find(p => p.id === state.editingProductId) : null;
+  const original = isEdit ? state.products.find(p => p.id === state.editingProductId) : null;
 
-  let product;
-  if (manager) {
-    product = {
-      id:          state.editingProductId || uid(),
-      name:        $('editName').value.trim(),
-      category:    original?.category || 'other',
-      description: $('editDesc').value.trim(),
-      photo:       state.photoDataUrl,
-      branches: {
-        branch1: Math.max(0, parseInt($('qty1').value, 10) || 0),
-        branch2: Math.max(0, parseInt($('qty2').value, 10) || 0),
-        branch3: Math.max(0, parseInt($('qty3').value, 10) || 0),
-      },
-      targets: {
-        branch1: Math.max(0, parseInt($('target1').value, 10) || 0),
-        branch2: Math.max(0, parseInt($('target2').value, 10) || 0),
-        branch3: Math.max(0, parseInt($('target3').value, 10) || 0),
-      },
-    };
-  } else {
-    const myBranch = userBranch();
-    const myQtyId  = myBranch === 'branch1' ? 'qty1' : myBranch === 'branch2' ? 'qty2' : 'qty3';
-
-    if (!isEdit) {
-      // Сотрудник создаёт новый товар
-      const staffNameInp = $('staffEditName');
-      const staffName = staffNameInp ? staffNameInp.value.trim() : '';
-      if (!staffName) {
-        if (staffNameInp) { staffNameInp.style.borderColor = 'var(--danger)'; staffNameInp.focus(); }
-        showToast('Введите название товара', 'error');
-        return;
-      }
-      if (staffNameInp) staffNameInp.style.borderColor = '';
-      const branches = { branch1: 0, branch2: 0, branch3: 0 };
-      branches[myBranch] = Math.max(0, parseInt($(myQtyId).value, 10) || 0);
-      product = {
-        id:          uid(),
-        name:        staffName,
-        category:    'other',
-        description: '',
-        photo:       state.photoDataUrl,
-        branches,
-        targets:     { branch1: 0, branch2: 0, branch3: 0 }, // сотрудник нормы не задаёт
-      };
-    } else {
-      if (!original) { showToast('⛔ Товар не найден', 'error'); return; }
-      // ВАЖНО: сотрудник не может менять targets — копируем из оригинала
-      product = {
-        ...original,
-        targets: original.targets || { branch1: 0, branch2: 0, branch3: 0 },
-        photo: state.photoDataUrl,
-        branches: {
-          ...original.branches,
-          [myBranch]: Math.max(0, parseInt($(myQtyId).value, 10) || 0),
-        },
-      };
-    }
-  }
+  const product = {
+    id:          state.editingProductId || uid(),
+    name,
+    category:    $('editCategory').value || 'other',
+    description: $('editDesc').value.trim(),
+    photo:       state.photoDataUrl,
+    branches: {
+      branch1: Math.max(0, parseInt($('qty1').value, 10) || 0),
+      branch2: Math.max(0, parseInt($('qty2').value, 10) || 0),
+      branch3: Math.max(0, parseInt($('qty3').value, 10) || 0),
+    },
+    targets: {
+      branch1: Math.max(0, parseInt($('target1').value, 10) || 0),
+      branch2: Math.max(0, parseInt($('target2').value, 10) || 0),
+      branch3: Math.max(0, parseInt($('target3').value, 10) || 0),
+    },
+  };
 
   if (isEdit) {
     const idx = state.products.findIndex(p => p.id === state.editingProductId);
     if (idx > -1) state.products[idx] = product;
 
-    if (manager) {
-      // Логируем отдельно изменение нормы (targets) — для отчётов
-      let targetChanged = false;
-      const targetChanges = [];
-      if (original) {
-        BRANCH_KEYS.forEach(k => {
-          const oldT = original.targets?.[k] ?? 0;
-          const newT = product.targets[k] ?? 0;
-          if (oldT !== newT) {
-            targetChanged = true;
-            targetChanges.push(`${BRANCH_LABELS[k]}: ${oldT}→${newT}`);
-          }
-        });
-      }
-      if (targetChanged) {
-        await writeLog('targetEdit', `"${product.name}" — норма: ${targetChanges.join(', ')}`, {
-          productId:   product.id,
-          productName: product.name,
-        });
-      }
-      // Если менеджер изменил фото при редактировании — записываем в галерею
-      const mgrPhotoChanged = (original?.photo || null) !== (product.photo || null);
-      if (mgrPhotoChanged && product.photo) {
-        await fbAddPhotoHistory({
-          id:          uid(),
-          productId:   product.id,
-          productName: product.name,
-          photo:       product.photo,
-          branch:      'manager', // помечаем как загруженное менеджером
-          userId:      state.currentUser.id,
-          userName:    state.currentUser.name || state.currentUser.username,
-          ts:          Date.now(),
-        });
-      }
-      await writeLog('edit', `"${product.name}"`, {
-        productId:   product.id,
-        productName: product.name,
-      });
-    } else {
-      const myBranch = userBranch();
-      const oldQty = original?.branches?.[myBranch] ?? 0;
-      const newQty = product.branches[myBranch];
-      const target = original?.targets?.[myBranch] ?? 0;
-      const photoChanged = (original?.photo || null) !== (product.photo || null);
-      if (oldQty !== newQty) {
-        await writeLog('qtyEdit', `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма: ${target})` : ''}`, {
-          productId:   product.id,
-          productName: product.name,
-          oldQty, newQty, target,
-        });
-      }
-      if (photoChanged) {
-        await writeLog('photoEdit', `"${product.name}"`, {
-          productId:   product.id,
-          productName: product.name,
-        });
-        // Сотрудник изменил фото — записываем в галерею
-        if (product.photo) {
-          await fbAddPhotoHistory({
-            id:          uid(),
-            productId:   product.id,
-            productName: product.name,
-            photo:       product.photo,
-            branch:      myBranch,
-            userId:      state.currentUser.id,
-            userName:    state.currentUser.name || state.currentUser.username,
-            ts:          Date.now(),
-          });
+    // Логи
+    let targetChanged = false;
+    const targetChanges = [];
+    if (original) {
+      BRANCH_KEYS.forEach(k => {
+        const oldT = original.targets?.[k] ?? 0;
+        const newT = product.targets[k] ?? 0;
+        if (oldT !== newT) {
+          targetChanged = true;
+          targetChanges.push(`${BRANCH_LABELS[k]}: ${oldT}→${newT}`);
         }
-      }
+      });
     }
+    if (targetChanged) {
+      await writeLog('targetEdit', `"${product.name}" — норма: ${targetChanges.join(', ')}`, {
+        productId: product.id, productName: product.name,
+      });
+    }
+    await writeLog('edit', `"${product.name}"`, {
+      productId: product.id, productName: product.name,
+    });
     showToast('✓ Сохранено', 'success');
   } else {
     state.products.unshift(product);
     showToast('✓ Товар добавлен', 'success');
     await writeLog('add', `"${product.name}"`, {
-      productId:   product.id,
-      productName: product.name,
+      productId: product.id, productName: product.name,
     });
-    // Если при создании товара сразу было фото — пишем в галерею
-    if (product.photo) {
-      const branchForPhoto = manager ? 'manager' : userBranch();
-      await fbAddPhotoHistory({
-        id:          uid(),
-        productId:   product.id,
-        productName: product.name,
-        photo:       product.photo,
-        branch:      branchForPhoto,
-        userId:      state.currentUser.id,
-        userName:    state.currentUser.name || state.currentUser.username,
-        ts:          Date.now(),
-      });
-    }
   }
 
   saveLocal(STORAGE_KEY, state.products);
@@ -1774,7 +1753,6 @@ function initSteppers() {
       if (btn.dataset.action === 'plus')  val++;
       if (btn.dataset.action === 'minus') val = Math.max(0, val - 1);
       input.value = val;
-      // Триггерим input event — для динамических подсказок под полями
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
   });
@@ -1851,14 +1829,6 @@ function initProductEvents() {
   // Менеджер — кнопка «Добавить товар» в хедере
   $('addProductBtn').addEventListener('click', () => openEditModal(null));
 
-  // Сотрудник — FAB кнопка «+»
-  const fab = $('fabAddBtn');
-  if (fab) {
-    fab.addEventListener('click', () => {
-      openEditModal(null);
-    });
-  }
-
   $('printBtn').addEventListener('click', preparePrint);
 
   $('editModalClose').addEventListener('click', () => closeOverlay($('editModal')));
@@ -1866,7 +1836,7 @@ function initProductEvents() {
   $('editModal').addEventListener('click', e => { if (e.target === $('editModal')) closeOverlay($('editModal')); });
   $('editSaveBtn').addEventListener('click', saveProduct);
 
-  // Кнопка удаления внутри формы редактирования (только для менеджера)
+  // Кнопка удаления внутри формы редактирования
   const delBtn = $('editDeleteBtn');
   if (delBtn) {
     delBtn.addEventListener('click', () => {
@@ -1897,11 +1867,10 @@ function initProductEvents() {
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    // Закрываем lightbox если открыт
+    // Сначала закрываем lightbox если открыт
     const lightbox = $('lightboxOverlay');
     if (lightbox && lightbox.classList.contains('active')) {
-      lightbox.classList.remove('active');
-      if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
+      closeLightbox();
       return;
     }
     const open = document.querySelectorAll('.modal-overlay.active');
@@ -1914,20 +1883,20 @@ function initProductEvents() {
 }
 
 /* ===========================================================
-   PAGE NAVIGATION (Товары / Отчёты)
+   PAGE NAVIGATION (Товары / Галерея / Отчёты)
 =========================================================== */
 function initPageNavigation() {
   document.querySelectorAll('.drawer-nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
       const page = btn.dataset.page;
-      if (!page) return;
-      // Защита: на отчёты — только менеджер
+      // Защита: отчёты — только менеджер
       if (page === 'reports' && !isManager()) {
         showToast('⛔ Отчёты доступны только менеджеру', 'error');
         return;
       }
       // Закрываем drawer
-      $('drawerOverlay').classList.remove('active');
+      const drawer = $('drawerOverlay');
+      if (drawer) drawer.classList.remove('active');
       document.body.style.overflow = '';
       setTimeout(() => switchPage(page), 200);
     });
@@ -1960,146 +1929,207 @@ function switchPage(page) {
   const toolbar = $('mainToolbar');
   if (toolbar) toolbar.style.display = (page === 'products') ? '' : 'none';
 
-  // FAB добавления товара — только для сотрудника на странице товаров
-  const fab = $('fabAddBtn');
-  if (fab) {
-    fab.style.display = (page === 'products' && isStaff()) ? 'flex' : 'none';
-  }
-
   if (page === 'products')      renderAll();
   else if (page === 'gallery')  renderGalleryPage();
   else if (page === 'reports')  renderReportsPage();
 }
 
 /* ===========================================================
-   REPORTS PAGE — кто что менял (только менеджер)
+   PROOF MODAL — сотрудник доказывает остаток фотографией
 =========================================================== */
-function initReportsEvents() {
-  document.querySelectorAll('#reportsFilters .reports-filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#reportsFilters .reports-filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.reportsFilter = btn.dataset.rfilter;
-      renderReportsPage();
-    });
+function initProofPhotoUpload() {
+  const input    = $('proofPhotoInput');
+  const camBtn   = $('proofBtnCamera');
+  const galBtn   = $('proofBtnGallery');
+  const area     = $('proofPhotoArea');
+  const removeBtn= $('proofPhotoRemoveBtn');
+  if (!input) return;
+
+  camBtn.addEventListener('click', () => {
+    input.setAttribute('capture', 'environment');
+    input.click();
+  });
+  galBtn.addEventListener('click', () => {
+    input.removeAttribute('capture');
+    input.click();
+  });
+  area.addEventListener('click', e => {
+    if (e.target === removeBtn || removeBtn.contains(e.target)) return;
+    input.removeAttribute('capture');
+    input.click();
+  });
+
+  input.addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file);
+      state.proofPhotoDataUrl = dataUrl;
+      $('proofPhotoPreview').src = dataUrl;
+      $('proofPhotoPreview').style.display = 'block';
+      $('proofPhotoPlaceholder').style.display = 'none';
+      $('proofPhotoRemoveBtn').style.display = 'block';
+    } catch (err) {
+      console.error(err);
+      showToast('⚠ Ошибка загрузки фото', 'error');
+    }
+  });
+
+  removeBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    state.proofPhotoDataUrl = null;
+    input.value = '';
+    $('proofPhotoPreview').style.display = 'none';
+    $('proofPhotoPlaceholder').style.display = 'flex';
+    $('proofPhotoRemoveBtn').style.display = 'none';
   });
 }
 
-function getReportsLogs() {
-  // Только логи, связанные с действиями над товарами
-  const reportTypes = new Set(['qtyEdit', 'photoEdit', 'add', 'edit', 'delete', 'targetEdit']);
-  let list = state.logs.filter(l => reportTypes.has(l.type));
+function initProofEvents() {
+  $('proofModalClose').addEventListener('click', () => closeOverlay($('proofModal')));
+  $('proofCancelBtn').addEventListener('click',  () => closeOverlay($('proofModal')));
+  $('proofModal').addEventListener('click', e => {
+    if (e.target === $('proofModal')) closeOverlay($('proofModal'));
+  });
+  $('proofSubmitBtn').addEventListener('click', submitProof);
 
-  if (state.reportsFilter !== 'all') {
-    list = list.filter(l => l.branch === state.reportsFilter);
+  // Подсказка норма vs введённый остаток
+  const qtyInput = $('proofQty');
+  if (qtyInput) {
+    qtyInput.addEventListener('input', updateProofHint);
   }
-
-  return list;
 }
 
-function renderReportsPage() {
-  if (!isManager()) return;
-  const listEl  = $('reportsList');
-  const emptyEl = $('reportsEmpty');
-  const sumEl   = $('reportsSummary');
-  if (!listEl) return;
-
-  // === Сводные карточки ===
-  const allReportLogs = state.logs.filter(l =>
-    ['qtyEdit', 'photoEdit', 'add', 'edit', 'delete', 'targetEdit'].includes(l.type)
-  );
-  const last24h    = Date.now() - 24 * 60 * 60 * 1000;
-  const recent     = allReportLogs.filter(l => l.ts > last24h);
-  const qtyChanges = allReportLogs.filter(l => l.type === 'qtyEdit').length;
-  const photoChanges = allReportLogs.filter(l => l.type === 'photoEdit').length;
-
-  // Отдельный счётчик "не хватает по норме" — на основе текущих остатков
-  let missingCount = 0;
-  state.products.forEach(p => {
-    BRANCH_KEYS.forEach(k => {
-      const q = p.branches?.[k] ?? 0;
-      const t = p.targets?.[k] ?? 0;
-      if (t > 0 && q < t) missingCount++;
-    });
-  });
-
-  sumEl.innerHTML = `
-    <div class="reports-summary-card">
-      <div class="reports-summary-card__label">Всего записей</div>
-      <div class="reports-summary-card__value">${allReportLogs.length}</div>
-    </div>
-    <div class="reports-summary-card">
-      <div class="reports-summary-card__label">За 24 часа</div>
-      <div class="reports-summary-card__value reports-summary-card__value--accent">${recent.length}</div>
-    </div>
-    <div class="reports-summary-card">
-      <div class="reports-summary-card__label">Изменений кол-ва</div>
-      <div class="reports-summary-card__value reports-summary-card__value--success">${qtyChanges}</div>
-    </div>
-    <div class="reports-summary-card">
-      <div class="reports-summary-card__label">Не хватает (по норме)</div>
-      <div class="reports-summary-card__value reports-summary-card__value--danger">${missingCount}</div>
-    </div>
-  `;
-
-  // === Список карточек ===
-  const list = getReportsLogs();
-
-  if (!list.length) {
-    listEl.innerHTML = '';
-    emptyEl.style.display = 'flex';
+function updateProofHint() {
+  const product = state.products.find(p => p.id === state.proofProductId);
+  if (!product) return;
+  const myBranch = userBranch();
+  const target = product.targets?.[myBranch] ?? 0;
+  const qty = parseInt($('proofQty').value, 10) || 0;
+  const hint = $('proofQtyHint');
+  if (!hint) return;
+  if (target <= 0) {
+    hint.textContent = '';
+    hint.className = 'branch-qty-target-hint';
     return;
   }
-  emptyEl.style.display = 'none';
+  const diff = qty - target;
+  if (diff < 0) {
+    hint.textContent = `⚠ должно быть ${target}, не хватает ${Math.abs(diff)}`;
+    hint.className = 'branch-qty-target-hint hint-low';
+  } else if (diff === 0) {
+    hint.textContent = `✓ всё на месте (норма ${target})`;
+    hint.className = 'branch-qty-target-hint hint-ok';
+  } else {
+    hint.textContent = `✓ норма ${target}, у вас на ${diff} больше`;
+    hint.className = 'branch-qty-target-hint hint-ok';
+  }
+}
 
-  listEl.innerHTML = list.slice(0, 200).map((log, i) => {
-    const info = LOG_TYPES[log.type] || { icon: '📌', label: log.type };
-    const iconCls = `report-card__icon--${log.type === 'qtyEdit' ? 'qty' : log.type === 'photoEdit' ? 'photo' : log.type === 'targetEdit' ? 'target' : log.type}`;
-    const branchTag = log.branch ? `<span class="report-card__branch">${escHtml(BRANCH_LABELS[log.branch] || log.branch)}</span>` : '';
-    const delay = Math.min(i * 20, 250);
+function openProofModal(productId) {
+  if (!isStaff()) return;
+  const product = state.products.find(p => p.id === productId);
+  if (!product) return;
+  state.proofProductId = productId;
+  state.proofPhotoDataUrl = null;
 
-    let body = '';
-    if (log.type === 'qtyEdit' && log.oldQty !== undefined && log.newQty !== undefined) {
-      const target = log.target || 0;
-      const isMiss = target > 0 && log.newQty < target;
-      const targetTag = target > 0
-        ? (isMiss
-            ? `<span class="deficit-badge deficit-badge--miss">не хватает ${target - log.newQty} шт</span>`
-            : `<span class="deficit-badge deficit-badge--ok">норма выполнена</span>`)
-        : '';
-      body = `
-        <div class="report-card__action">
-          ${escHtml(info.label)}: <span class="report-card__product">${escHtml(log.productName || '—')}</span>
-        </div>
-        <div class="report-card__change ${isMiss ? 'report-card__change--miss' : ''}">
-          <span class="report-card__change-old">${log.oldQty} шт</span>
-          <span class="report-card__change-arrow">→</span>
-          <span class="report-card__change-new">${log.newQty} шт</span>
-          ${target > 0 ? `<span class="report-card__change-arrow">/</span><span class="report-card__change-target">норма ${target}</span>` : ''}
-          ${targetTag}
-        </div>
-      `;
-    } else {
-      body = `<div class="report-card__action">${escHtml(info.label)}${log.details ? ' — ' + escHtml(log.details) : ''}</div>`;
-    }
+  const myBranch = userBranch();
+  const target = product.targets?.[myBranch] ?? 0;
+  const current = product.branches?.[myBranch] ?? 0;
 
-    return `
-      <div class="report-card" style="animation-delay:${delay}ms">
-        <div class="report-card__head">
-          <div class="report-card__icon ${iconCls}">${info.icon}</div>
-          <span class="report-card__user">${escHtml(log.userName || 'Неизвестно')}</span>
-          ${branchTag}
-          <span class="report-card__time">${formatRelative(log.ts)}</span>
-        </div>
-        <div class="report-card__body">
-          ${body}
-        </div>
-      </div>`;
-  }).join('');
+  $('proofProductName').textContent = product.name;
+  $('proofTargetValue').textContent = target > 0 ? `${target} шт` : 'не задано';
+  $('proofCurrentValue').textContent = `${current} шт`;
+  // Подсказку "должно быть" скрываем, если норма не задана
+  $('proofTargetRow').style.display = target > 0 ? '' : 'none';
+
+  // Пред-заполняем поле текущим значением
+  $('proofQty').value = current;
+  $('proofComment').value = '';
+
+  // Сброс фото
+  $('proofPhotoPreview').src = '';
+  $('proofPhotoPreview').style.display = 'none';
+  $('proofPhotoPlaceholder').style.display = 'flex';
+  $('proofPhotoRemoveBtn').style.display = 'none';
+  $('proofPhotoInput').value = '';
+
+  updateProofHint();
+  openOverlay($('proofModal'));
+}
+
+async function submitProof() {
+  const product = state.products.find(p => p.id === state.proofProductId);
+  if (!product) { showToast('⚠ Товар не найден', 'error'); return; }
+
+  if (!state.proofPhotoDataUrl) {
+    showToast('📸 Сначала сфотографируйте товар', 'error');
+    return;
+  }
+
+  const qty = Math.max(0, parseInt($('proofQty').value, 10) || 0);
+  const comment = $('proofComment').value.trim();
+  const myBranch = userBranch();
+  const target = product.targets?.[myBranch] ?? 0;
+  const oldQty = product.branches?.[myBranch] ?? 0;
+
+  const proofEntry = {
+    id:          uid(),
+    productId:   product.id,
+    productName: product.name,
+    category:    product.category || 'other',
+    photo:       state.proofPhotoDataUrl,
+    qty,
+    target,
+    branch:      myBranch,
+    userId:      state.currentUser.id,
+    userName:    state.currentUser.name || state.currentUser.username,
+    comment,
+    ts:          Date.now(),
+  };
+
+  // Блокируем кнопку
+  const btn = $('proofSubmitBtn');
+  btn.disabled = true;
+
+  try {
+    // 1. Сохраняем proof
+    await fbAddProof(proofEntry);
+
+    // 2. Обновляем фактический остаток
+    const updated = {
+      ...product,
+      branches: { ...product.branches, [myBranch]: qty },
+    };
+    const idx = state.products.findIndex(p => p.id === product.id);
+    if (idx > -1) state.products[idx] = updated;
+    saveLocal(STORAGE_KEY, state.products);
+    await fbSaveProduct(updated);
+
+    // 3. Лог
+    await writeLog('proofSubmit',
+      `"${product.name}": ${qty} шт${target ? ` / норма ${target}` : ''}` +
+      (comment ? ` — ${comment}` : ''),
+      {
+        productId: product.id,
+        productName: product.name,
+        oldQty, newQty: qty, target,
+      });
+
+    showToast('✓ Отчёт отправлен менеджеру', 'success');
+    closeOverlay($('proofModal'));
+    state.proofProductId = null;
+    state.proofPhotoDataUrl = null;
+  } catch (err) {
+    console.error('Proof submit error', err);
+    showToast('⚠ Ошибка отправки отчёта', 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ===========================================================
-   GALLERY PAGE — фотографии товаров с указанием филиала и даты
+   GALLERY PAGE — фотографии товаров с филиалом и датой
 =========================================================== */
 function initGalleryEvents() {
   document.querySelectorAll('#galleryFilters .reports-filter-btn').forEach(btn => {
@@ -2112,39 +2142,28 @@ function initGalleryEvents() {
   });
 }
 
-function getFilteredPhotos() {
-  let list = [...state.photoHistory];
-  if (isStaff()) {
-    // Сотрудник видит только фото своего филиала (включая фото, загруженные менеджером для его товаров — но мы пишем branch=manager для менеджерских)
-    const me = userBranch();
-    list = list.filter(p => p.branch === me);
-  } else {
-    // Менеджер видит все, с фильтром по выбранному филиалу
-    if (state.galleryFilter !== 'all') {
-      list = list.filter(p => p.branch === state.galleryFilter);
-    }
-  }
-  return list;
-}
-
 function renderGalleryPage() {
   const grid    = $('galleryGrid');
   const empty   = $('galleryEmpty');
   const subText = $('galleryPageSub');
   if (!grid) return;
 
-  // Подзаголовок страницы
   if (subText) {
     if (isStaff()) {
-      subText.textContent = `Фото товаров филиала «${BRANCH_LABELS[userBranch()]}»`;
+      subText.textContent = `Фото товаров вашего филиала`;
     } else {
       subText.textContent = state.galleryFilter === 'all'
         ? 'Все фотографии со всех филиалов'
-        : `Фото с филиала «${BRANCH_LABELS[state.galleryFilter] || 'Менеджер'}»`;
+        : `Фото с филиала «${BRANCH_LABELS[state.galleryFilter]}»`;
     }
   }
 
-  const list = getFilteredPhotos();
+  let list = [...state.proofs];
+  if (isStaff()) {
+    list = list.filter(p => p.branch === userBranch());
+  } else if (state.galleryFilter !== 'all') {
+    list = list.filter(p => p.branch === state.galleryFilter);
+  }
 
   if (!list.length) {
     grid.innerHTML = '';
@@ -2155,26 +2174,24 @@ function renderGalleryPage() {
 
   grid.innerHTML = list.map((entry, i) => {
     const delay = Math.min(i * 25, 300);
-    const branchLabel = entry.branch === 'manager'
-      ? '👑 Менеджер'
-      : (BRANCH_LABELS[entry.branch] || entry.branch);
+    const branchLabel = BRANCH_LABELS[entry.branch] || entry.branch;
     return `
-      <div class="gallery-card" data-photo-id="${escHtml(entry.id)}" style="animation-delay:${delay}ms">
+      <div class="gallery-card" data-proof-id="${escHtml(entry.id)}" style="animation-delay:${delay}ms">
         <div class="gallery-card__image-wrap">
           <img class="gallery-card__image" src="${entry.photo}" alt="${escHtml(entry.productName)}" loading="lazy"/>
           <span class="gallery-card__branch-badge">${escHtml(branchLabel)}</span>
         </div>
         <div class="gallery-card__body">
           <div class="gallery-card__name">${escHtml(entry.productName)}</div>
-          <div class="gallery-card__date">📅 ${formatDateTime(entry.ts)}</div>
+          <div class="gallery-card__date">📅 ${new Date(entry.ts).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</div>
         </div>
       </div>`;
   }).join('');
 
   grid.querySelectorAll('.gallery-card').forEach(card => {
     card.addEventListener('click', () => {
-      const id = card.dataset.photoId;
-      const entry = state.photoHistory.find(p => p.id === id);
+      const id = card.dataset.proofId;
+      const entry = state.proofs.find(p => p.id === id);
       if (entry) openLightbox(entry);
     });
   });
@@ -2194,11 +2211,10 @@ function initLightbox() {
 
 function openLightbox(entry) {
   $('lightboxImg').src = entry.photo;
-  $('lightboxName').textContent = entry.productName;
-  const branchLabel = entry.branch === 'manager'
-    ? '👑 Менеджер'
-    : (BRANCH_LABELS[entry.branch] || entry.branch);
-  $('lightboxMeta').textContent = `${branchLabel} • ${entry.userName} • ${formatDateTime(entry.ts)}`;
+  $('lightboxName').textContent = entry.productName || 'Фото';
+  const branchLabel = BRANCH_LABELS[entry.branch] || entry.branch || '';
+  const dt = new Date(entry.ts).toLocaleString('ru-RU', { day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  $('lightboxMeta').textContent = `${branchLabel} · ${entry.userName || ''} · ${dt}`;
   $('lightboxOverlay').classList.add('active');
   document.body.style.overflow = 'hidden';
 }
@@ -2206,6 +2222,315 @@ function openLightbox(entry) {
 function closeLightbox() {
   $('lightboxOverlay').classList.remove('active');
   if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
+}
+
+/* ===========================================================
+   REPORTS PAGE — отчёты по дате/филиалу/категории
+=========================================================== */
+function initReportsEvents() {
+  // Фильтры по филиалу
+  document.querySelectorAll('#reportsBranchFilters .reports-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#reportsBranchFilters .reports-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.reportsBranchFilter = btn.dataset.rfilter;
+      renderReportsPage();
+    });
+  });
+
+  // Фильтры по категории
+  document.querySelectorAll('#reportsCategoryFilters .reports-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#reportsCategoryFilters .reports-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.reportsCategoryFilter = btn.dataset.cfilter;
+      renderReportsPage();
+    });
+  });
+
+  // Поиск
+  const searchInp = $('reportsSearchInput');
+  if (searchInp) {
+    searchInp.addEventListener('input', () => {
+      state.reportsSearchQuery = searchInp.value.trim().toLowerCase();
+      $('reportsSearchClear').style.display = state.reportsSearchQuery ? '' : 'none';
+      renderReportsPage();
+    });
+  }
+  const clearBtn = $('reportsSearchClear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      searchInp.value = '';
+      state.reportsSearchQuery = '';
+      clearBtn.style.display = 'none';
+      renderReportsPage();
+    });
+  }
+
+  // Кнопка Excel в шапке отчётов
+  $('reportsExcelBtn').addEventListener('click', exportToExcel);
+}
+
+function getFilteredProofs() {
+  let list = [...state.proofs];
+  if (state.reportsBranchFilter !== 'all') {
+    list = list.filter(p => p.branch === state.reportsBranchFilter);
+  }
+  if (state.reportsCategoryFilter !== 'all') {
+    list = list.filter(p => (p.category || 'other') === state.reportsCategoryFilter);
+  }
+  if (state.reportsSearchQuery) {
+    const q = state.reportsSearchQuery;
+    list = list.filter(p =>
+      (p.productName || '').toLowerCase().includes(q) ||
+      (p.userName || '').toLowerCase().includes(q)
+    );
+  }
+  return list;
+}
+
+function renderReportsPage() {
+  if (!isManager()) return;
+
+  const list = getFilteredProofs();
+
+  // Сводка
+  const summary = $('reportsSummary');
+  const totalReports = list.length;
+  const branches = new Set(list.map(p => p.branch));
+  const missCount = list.filter(p => p.target > 0 && p.qty < p.target).length;
+  const todayCount = list.filter(p => getDateGroupKey(p.ts) === 'today').length;
+
+  summary.innerHTML = `
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Всего отчётов</div>
+      <div class="reports-summary-card__value reports-summary-card__value--accent">${totalReports}</div>
+    </div>
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Сегодня</div>
+      <div class="reports-summary-card__value reports-summary-card__value--success">${todayCount}</div>
+    </div>
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Филиалов отчиталось</div>
+      <div class="reports-summary-card__value">${branches.size} / 3</div>
+    </div>
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Недостача</div>
+      <div class="reports-summary-card__value reports-summary-card__value--danger">${missCount}</div>
+    </div>
+  `;
+
+  // Список отчётов
+  const listEl = $('reportsList');
+  const empty = $('reportsEmpty');
+
+  if (!list.length) {
+    listEl.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Группируем по дате
+  const groups = {};
+  list.forEach(proof => {
+    const key = getDateGroupKey(proof.ts);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(proof);
+  });
+
+  // Сортировка ключей: today, yesterday, потом обратная сортировка по дате
+  const sortedKeys = Object.keys(groups).sort((a, b) => {
+    if (a === 'today') return -1;
+    if (b === 'today') return 1;
+    if (a === 'yesterday') return -1;
+    if (b === 'yesterday') return 1;
+    return b.localeCompare(a);
+  });
+
+  listEl.innerHTML = sortedKeys.map(key => {
+    const proofs = groups[key];
+    const cards = proofs.map((proof, i) => {
+      const delay = Math.min(i * 30, 300);
+      const branchLabel = BRANCH_LABELS[proof.branch] || proof.branch;
+      const cat = proof.category || 'other';
+      const catLabel = `${CATEGORY_EMOJI[cat] || '📦'} ${CATEGORY_LABELS[cat] || 'Прочее'}`;
+      const target = proof.target || 0;
+      const qty = proof.qty || 0;
+      const isMiss = target > 0 && qty < target;
+      const isOk = target > 0 && qty >= target;
+      const cardCls = isMiss ? 'proof-card--miss' : (isOk ? 'proof-card--ok' : '');
+      const qtyCls = isMiss ? 'proof-card__qty--miss' : (isOk ? 'proof-card__qty--ok' : '');
+
+      let deficitHtml = '';
+      if (target > 0) {
+        const diff = qty - target;
+        if (diff < 0) {
+          deficitHtml = `<span class="proof-card__deficit">−${Math.abs(diff)} шт не хватает</span>`;
+        } else if (diff === 0) {
+          deficitHtml = `<span class="proof-card__deficit proof-card__deficit--ok">✓ всё на месте</span>`;
+        } else {
+          deficitHtml = `<span class="proof-card__deficit proof-card__deficit--ok">+${diff} шт</span>`;
+        }
+      }
+
+      const photoHtml = proof.photo
+        ? `<img src="${proof.photo}" alt="${escHtml(proof.productName)}" loading="lazy"/>`
+        : `<div class="proof-card__photo--empty">📷</div>`;
+
+      return `
+        <div class="proof-card ${cardCls}" data-proof-id="${escHtml(proof.id)}" style="animation-delay:${delay}ms">
+          <div class="proof-card__photo">${photoHtml}</div>
+          <div class="proof-card__body">
+            <div class="proof-card__head">
+              <div class="proof-card__product-name">${escHtml(proof.productName)}</div>
+              <div class="proof-card__time">${formatTime(proof.ts)}</div>
+            </div>
+            <div class="proof-card__meta">
+              <span class="proof-card__chip proof-card__chip--branch">🏪 ${escHtml(branchLabel)}</span>
+              <span class="proof-card__chip proof-card__chip--cat">${escHtml(catLabel)}</span>
+              <span class="proof-card__chip proof-card__chip--user">👤 ${escHtml(proof.userName || '')}</span>
+            </div>
+            <div class="proof-card__numbers">
+              <span class="proof-card__qty ${qtyCls}">${qty} шт</span>
+              ${target > 0 ? `<span class="proof-card__sep">/</span><span class="proof-card__target">норма ${target}</span>` : ''}
+              ${deficitHtml}
+            </div>
+            ${proof.comment ? `<div class="proof-card__comment">«${escHtml(proof.comment)}»</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="report-day-group">
+        <div class="report-day-group__header">
+          <span class="report-day-group__date">${formatDateGroupLabel(key)}</span>
+          <span class="report-day-group__count">${proofs.length} отчёт${proofs.length === 1 ? '' : (proofs.length < 5 ? 'а' : 'ов')}</span>
+        </div>
+        <div class="report-day-group__body">${cards}</div>
+      </div>`;
+  }).join('');
+
+  // Клик на фото → lightbox
+  listEl.querySelectorAll('.proof-card__photo').forEach(ph => {
+    ph.addEventListener('click', e => {
+      e.stopPropagation();
+      const card = ph.closest('.proof-card');
+      if (!card) return;
+      const id = card.dataset.proofId;
+      const entry = state.proofs.find(p => p.id === id);
+      if (entry) openLightbox(entry);
+    });
+  });
+}
+
+/* ===========================================================
+   EXCEL EXPORT (SheetJS)
+=========================================================== */
+function exportToExcel() {
+  if (!isManager()) {
+    showToast('⛔ Только менеджер может выгружать Excel', 'error');
+    return;
+  }
+  if (typeof XLSX === 'undefined') {
+    showToast('⚠ Библиотека Excel не загружена', 'error');
+    return;
+  }
+
+  const list = getFilteredProofs();
+  if (!list.length) {
+    showToast('Нет данных для экспорта', 'error');
+    return;
+  }
+
+  // Заголовки и данные
+  const header = ['Дата', 'Время', 'Филиал', 'Категория', 'Товар', 'Должно быть', 'Фактически', 'Расхождение', 'Сотрудник', 'Комментарий'];
+  const rows = list.map(p => {
+    const d = new Date(p.ts);
+    const date = d.toLocaleDateString('ru-RU');
+    const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const target = p.target || 0;
+    const qty = p.qty || 0;
+    const diff = target > 0 ? (qty - target) : '';
+    return [
+      date,
+      time,
+      BRANCH_LABELS[p.branch] || p.branch,
+      CATEGORY_LABELS[p.category] || 'Прочее',
+      p.productName || '',
+      target > 0 ? target : '',
+      qty,
+      diff === '' ? '' : (diff > 0 ? `+${diff}` : `${diff}`),
+      p.userName || '',
+      p.comment || '',
+    ];
+  });
+
+  const wsData = [header, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // Ширина колонок
+  ws['!cols'] = [
+    { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 22 }, { wch: 32 },
+    { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 40 },
+  ];
+
+  // Высота строки заголовка
+  ws['!rows'] = [{ hpt: 28 }];
+
+  // Стили заголовка (SheetJS Community поддерживает только базовые стили,
+  // но мы добавим bold/fill через расширенный подход)
+  const headerRange = XLSX.utils.decode_range(ws['!ref']);
+  for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
+    if (!ws[cellRef]) continue;
+    ws[cellRef].s = {
+      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 },
+      fill: { fgColor: { rgb: '1877F2' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: {
+        top:    { style: 'thin', color: { rgb: '888888' } },
+        bottom: { style: 'thin', color: { rgb: '888888' } },
+        left:   { style: 'thin', color: { rgb: '888888' } },
+        right:  { style: 'thin', color: { rgb: '888888' } },
+      },
+    };
+  }
+
+  // Подсветка строк с недостачей и зебра
+  for (let R = 1; R <= rows.length; R++) {
+    const isMiss = typeof rows[R-1][7] === 'string' && rows[R-1][7].startsWith('-');
+    const isZebra = R % 2 === 0;
+    const fillRgb = isMiss ? 'FDECEC' : (isZebra ? 'F7F8FA' : 'FFFFFF');
+    for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+      const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
+      ws[cellRef].s = {
+        font: { sz: 11, color: { rgb: isMiss && C === 7 ? 'C42424' : '222222' }, bold: isMiss && C === 7 },
+        fill: { fgColor: { rgb: fillRgb } },
+        alignment: { vertical: 'center', wrapText: true,
+          horizontal: ([5, 6, 7].includes(C)) ? 'center' : 'left' },
+        border: {
+          top:    { style: 'thin', color: { rgb: 'E5E7EB' } },
+          bottom: { style: 'thin', color: { rgb: 'E5E7EB' } },
+          left:   { style: 'thin', color: { rgb: 'E5E7EB' } },
+          right:  { style: 'thin', color: { rgb: 'E5E7EB' } },
+        },
+      };
+    }
+  }
+
+  // Создаём книгу
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Отчёты');
+
+  // Имя файла с датой
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('ru-RU').replaceAll('.', '-');
+  const fileName = `Отчёт_${dateStr}.xlsx`;
+
+  XLSX.writeFile(wb, fileName);
+  showToast(`✓ Скачано: ${fileName}`, 'success');
 }
 
 /* ===========================================================
