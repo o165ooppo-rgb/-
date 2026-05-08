@@ -44,6 +44,7 @@ const db           = getDatabase(firebaseApp);
 const PRODUCTS_REF = ref(db, 'products');
 const ACCOUNTS_REF = ref(db, 'accounts');
 const LOGS_REF     = ref(db, 'logs');
+const PHOTOS_REF   = ref(db, 'photoHistory'); // история загруженных фото для галереи
 
 /* ===========================================================
    КОНСТАНТЫ
@@ -52,6 +53,7 @@ const STORAGE_KEY    = 'mone_products_v2';
 const SESSION_KEY    = 'mone_session_v2';
 const ACCOUNTS_CACHE = 'mone_accounts_v2';
 const LOGS_CACHE     = 'mone_logs_v2';
+const PHOTOS_CACHE   = 'mone_photos_v2';
 
 const CATEGORY_LABELS = {
   drinks:     'Напитки',
@@ -66,14 +68,15 @@ const BRANCH_KEYS   = ['branch1', 'branch2', 'branch3'];
 const ROLE_LABELS   = { manager: 'Менеджер', staff: 'Сотрудник филиала' };
 
 const LOG_TYPES = {
-  login:    { icon: '🔑', label: 'Вход в систему' },
-  logout:   { icon: '🚪', label: 'Выход из системы' },
-  add:      { icon: '➕', label: 'Добавление товара' },
-  edit:     { icon: '✏️', label: 'Редактирование товара' },
-  delete:   { icon: '🗑️', label: 'Удаление товара' },
-  qtyEdit:  { icon: '🔢', label: 'Изменение количества' },
-  photoEdit:{ icon: '📷', label: 'Изменение фото' },
-  userEdit: { icon: '👤', label: 'Изменение аккаунта' },
+  login:      { icon: '🔑', label: 'Вход в систему' },
+  logout:     { icon: '🚪', label: 'Выход из системы' },
+  add:        { icon: '➕', label: 'Добавление товара' },
+  edit:       { icon: '✏️', label: 'Редактирование товара' },
+  delete:     { icon: '🗑️', label: 'Удаление товара' },
+  qtyEdit:    { icon: '🔢', label: 'Изменение количества' },
+  photoEdit:  { icon: '📷', label: 'Изменение фото' },
+  userEdit:   { icon: '👤', label: 'Изменение аккаунта' },
+  targetEdit: { icon: '🎯', label: 'Изменение нормы' },
 };
 
 let renderToken = 0;
@@ -127,13 +130,14 @@ function getDefaultAccounts() {
 }
 
 function getDefaultProducts() {
+  // targets — норма (сколько должно быть), задаёт менеджер
   return [
-    { id: uid(), name: 'Pepsi 0.5л',                category: 'drinks',     description: 'Газированный напиток Pepsi, бутылка 0.5 литра', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  } },
-    { id: uid(), name: 'Coca-Cola 1л',              category: 'drinks',     description: 'Классическая Кока-Кола, бутылка 1 литр',         photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 } },
-    { id: uid(), name: 'Пластиковые стаканы 250мл', category: 'disposable', description: 'Одноразовые стаканы',                              photo: null, branches: { branch1: 5,  branch2: 2,  branch3: 0  } },
-    { id: uid(), name: 'Трубочки для коктейлей',    category: 'disposable', description: 'Пластиковые трубочки',                             photo: null, branches: { branch1: 3,  branch2: 0,  branch3: 1  } },
-    { id: uid(), name: 'Сахар',                     category: 'food',       description: 'Сахар-песок',                                      photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  } },
-    { id: uid(), name: 'Fairy 500мл',               category: 'cleaning',   description: 'Средство для мытья посуды Fairy',                  photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  } },
+    { id: uid(), name: 'Pepsi 0.5л',                category: 'drinks',     description: 'Газированный напиток Pepsi, бутылка 0.5 литра', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  }, targets: { branch1: 30, branch2: 30, branch3: 30 } },
+    { id: uid(), name: 'Coca-Cola 1л',              category: 'drinks',     description: 'Классическая Кока-Кола, бутылка 1 литр',         photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 }, targets: { branch1: 20, branch2: 20, branch3: 20 } },
+    { id: uid(), name: 'Пластиковые стаканы 250мл', category: 'disposable', description: 'Одноразовые стаканы',                              photo: null, branches: { branch1: 5,  branch2: 2,  branch3: 0  }, targets: { branch1: 50, branch2: 50, branch3: 50 } },
+    { id: uid(), name: 'Трубочки для коктейлей',    category: 'disposable', description: 'Пластиковые трубочки',                             photo: null, branches: { branch1: 3,  branch2: 0,  branch3: 1  }, targets: { branch1: 30, branch2: 30, branch3: 30 } },
+    { id: uid(), name: 'Сахар',                     category: 'food',       description: 'Сахар-песок',                                      photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  }, targets: { branch1: 15, branch2: 15, branch3: 15 } },
+    { id: uid(), name: 'Fairy 500мл',               category: 'cleaning',   description: 'Средство для мытья посуды Fairy',                  photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  }, targets: { branch1: 6,  branch2: 6,  branch3: 6  } },
   ];
 }
 
@@ -144,16 +148,21 @@ const state = {
   products:         [],
   accounts:         [],
   logs:             [],
+  photoHistory:     [],
   activeBranch:     'all',
   stockFilter:      'all',
   sortMode:         'smart',
   pendingDeleteId:  null,
+  pendingDeleteAccountId: null,
   editingProductId: null,
   editingUserId:    null,
   photoDataUrl:     null,
   firebaseLoaded:   false,
   currentUser:      null,
   validatedSession: false,
+  currentPage:      'products', // products | gallery | reports
+  reportsFilter:    'all',
+  galleryFilter:    'all',
 };
 
 /* ===========================================================
@@ -223,6 +232,24 @@ function getQty(product, branch = 'all') {
   return product.branches?.[branch] ?? 0;
 }
 
+function getTarget(product, branch = 'all') {
+  if (!product.targets) return 0;
+  if (branch === 'all') return BRANCH_KEYS.reduce((s, k) => s + (product.targets?.[k] ?? 0), 0);
+  return product.targets?.[branch] ?? 0;
+}
+
+function formatRelative(ts) {
+  const diff = Date.now() - ts;
+  const min  = Math.floor(diff / 60000);
+  if (min < 1)   return 'только что';
+  if (min < 60)  return `${min} мин назад`;
+  const h = Math.floor(min / 60);
+  if (h < 24)    return `${h} ч назад`;
+  const d = Math.floor(h / 24);
+  if (d < 7)     return `${d} д назад`;
+  return new Date(ts).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
 function getStockStatus(qty) {
   if (qty === 0) return 'out';
   if (qty <= 5)  return 'low';
@@ -264,6 +291,10 @@ function initFirebaseListeners() {
   onValue(PRODUCTS_REF, (snap) => {
     const data = snap.val();
     state.products = data ? Object.values(data) : [];
+    // Миграция: добавляем targets если отсутствует (для старых товаров)
+    state.products.forEach(p => {
+      if (!p.targets) p.targets = { branch1: 0, branch2: 0, branch3: 0 };
+    });
     saveLocal(STORAGE_KEY, state.products);
     state.firebaseLoaded = true;
     renderAll();
@@ -272,6 +303,9 @@ function initFirebaseListeners() {
     console.error('[products]', err);
     if (!state.firebaseLoaded) {
       state.products = loadLocal(STORAGE_KEY) || [];
+      state.products.forEach(p => {
+        if (!p.targets) p.targets = { branch1: 0, branch2: 0, branch3: 0 };
+      });
       state.firebaseLoaded = true;
       renderAll();
     }
@@ -297,11 +331,24 @@ function initFirebaseListeners() {
       state.logs = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
       saveLocal(LOGS_CACHE, state.logs);
       renderManagerLogs();
+      if (state.currentPage === 'reports') renderReportsPage();
     }, () => {
       state.logs = loadLocal(LOGS_CACHE) || [];
       renderManagerLogs();
+      if (state.currentPage === 'reports') renderReportsPage();
     });
   }
+
+  // История фотографий — для галереи. Видят все (на стороне клиента staff фильтруется по своему филиалу).
+  onValue(PHOTOS_REF, (snap) => {
+    const data = snap.val();
+    state.photoHistory = data ? Object.values(data).sort((a, b) => b.ts - a.ts) : [];
+    saveLocal(PHOTOS_CACHE, state.photoHistory);
+    if (state.currentPage === 'gallery') renderGalleryPage();
+  }, () => {
+    state.photoHistory = loadLocal(PHOTOS_CACHE) || [];
+    if (state.currentPage === 'gallery') renderGalleryPage();
+  });
 }
 
 function revalidateCurrentSession() {
@@ -329,7 +376,10 @@ function revalidateCurrentSession() {
 function forceLogout(message) {
   clearSession();
   state.currentUser = null;
-  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+  ['mainHeader', 'mainToolbar'].forEach(id => {
+    const el = $(id); if (el) el.style.display = 'none';
+  });
+  ['pageProducts', 'pageGallery', 'pageReports'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
   const fab = $('fabAddBtn'); if (fab) fab.style.display = 'none';
@@ -363,7 +413,17 @@ async function fbClearLogs() {
   catch (e) { console.error('Clear logs error:', e); }
 }
 
-async function writeLog(type, details = '') {
+async function fbAddPhotoHistory(entry) {
+  try { await set(ref(db, `photoHistory/${entry.id}`), entry); }
+  catch (e) { console.error('Photo history error:', e); }
+}
+
+async function fbDeleteAccount(id) {
+  try { await remove(ref(db, `accounts/${id}`)); }
+  catch (e) { console.error('Delete account error:', e); showToast('⚠ Ошибка удаления аккаунта', 'error'); }
+}
+
+async function writeLog(type, details = '', extra = {}) {
   if (!state.currentUser) return;
   const entry = {
     id:       uid(),
@@ -374,6 +434,7 @@ async function writeLog(type, details = '') {
     branch:   state.currentUser.branch || null,
     details,
     ts:       Date.now(),
+    ...extra,
   };
   try {
     await set(ref(db, `logs/${entry.id}`), entry);
@@ -499,7 +560,7 @@ function showLoginError(message) {
 
 function enterApp() {
   $('authOverlay').style.display = 'none';
-  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+  ['mainHeader', 'mainToolbar'].forEach(id => {
     const el = $(id); if (el) el.style.display = '';
   });
 
@@ -522,19 +583,27 @@ function enterApp() {
     initManagerPanel();
     initUserChip();
     initMobileUI();
+    initPageNavigation();
+    initReportsEvents();
+    initGalleryEvents();
+    initLightbox();
     enterApp._initialized = true;
   }
 
   initFirebaseListeners();
   updateDrawerProfile();
   updateBranchIndicator();
+  switchPage('products');
 }
 
 async function handleLogout() {
   await writeLog('logout', '');
   clearSession();
   state.currentUser = null;
-  ['mainHeader', 'mainToolbar', 'mainContent'].forEach(id => {
+  ['mainHeader', 'mainToolbar'].forEach(id => {
+    const el = $(id); if (el) el.style.display = 'none';
+  });
+  ['pageProducts', 'pageGallery', 'pageReports'].forEach(id => {
     const el = $(id); if (el) el.style.display = 'none';
   });
   const fab = $('fabAddBtn'); if (fab) fab.style.display = 'none';
@@ -561,6 +630,7 @@ function applyRoleVisibility() {
   $('managerPanelBtn').style.display  = manager ? '' : 'none';
   $('drawerAddBtn').style.display     = ''; // видно всем — и менеджеру, и сотруднику
   $('drawerManagerBtn').style.display = manager ? '' : 'none';
+  $('drawerReportsBtn').style.display = manager ? '' : 'none'; // отчёты — только менеджер
 
   // Сотрудник — FAB кнопка «+»
   const fab = $('fabAddBtn');
@@ -570,6 +640,10 @@ function applyRoleVisibility() {
   $('branches').style.display        = manager ? '' : 'none';
   $('drawerBranchBtn').style.display = manager ? '' : 'none';
   $('branchIndicator').style.display = manager ? '' : 'none';
+
+  // Фильтры галереи по филиалам — только менеджеру (сотрудник видит только свой филиал)
+  const gFilters = $('galleryFilters');
+  if (gFilters) gFilters.style.display = manager ? 'flex' : 'none';
 
   if (!manager) {
     document.querySelectorAll('.branches .branch-btn').forEach(b => {
@@ -745,6 +819,7 @@ function initManagerPanel() {
     await fbClearLogs();
     state.logs = [];
     renderManagerLogs();
+    if (state.currentPage === 'reports') renderReportsPage();
     showToast('✓ Журнал очищен');
   });
 
@@ -757,6 +832,53 @@ function initManagerPanel() {
     inp.type = inp.type === 'password' ? 'text' : 'password';
   });
   $('ueSubmitBtn').addEventListener('click', handleUserEditSubmit);
+
+  // Кнопка "Удалить аккаунт" в модалке редактирования
+  $('ueDeleteBtn').addEventListener('click', () => {
+    const accId = state.editingUserId;
+    if (!accId) return;
+    const acc = state.accounts.find(a => a.id === accId);
+    if (!acc) return;
+    if (acc.role === 'manager') {
+      showToast('⛔ Нельзя удалить аккаунт менеджера', 'error');
+      return;
+    }
+    if (acc.id === state.currentUser.id) {
+      showToast('⛔ Нельзя удалить собственный аккаунт', 'error');
+      return;
+    }
+    state.pendingDeleteAccountId = accId;
+    $('accountDeleteText').textContent =
+      `Аккаунт «${acc.name}» (логин: ${acc.username}) будет удалён. ` +
+      `Сотрудник будет немедленно разлогинен и не сможет войти, пока вы не создадите новый аккаунт.`;
+    closeOverlay($('userEditModal'));
+    setTimeout(() => openOverlay($('accountDeleteModal')), 100);
+  });
+
+  // Подтверждение удаления аккаунта
+  $('accountDeleteCancelBtn').addEventListener('click', () => {
+    closeOverlay($('accountDeleteModal'));
+    state.pendingDeleteAccountId = null;
+  });
+  $('accountDeleteModal').addEventListener('click', e => {
+    if (e.target === $('accountDeleteModal')) {
+      closeOverlay($('accountDeleteModal'));
+      state.pendingDeleteAccountId = null;
+    }
+  });
+  $('accountDeleteConfirmBtn').addEventListener('click', async () => {
+    const accId = state.pendingDeleteAccountId;
+    closeOverlay($('accountDeleteModal'));
+    state.pendingDeleteAccountId = null;
+    if (!accId) return;
+    const acc = state.accounts.find(a => a.id === accId);
+    if (!acc) return;
+    await fbDeleteAccount(accId);
+    await writeLog('userEdit', `Удалён аккаунт: ${acc.name} (@${acc.username})`);
+    showToast(`✓ Аккаунт «${acc.name}» удалён`);
+    // После удаления при следующем onValue(ACCOUNTS_REF) у удалённого
+    // пользователя сработает revalidateCurrentSession → forceLogout.
+  });
 }
 
 function openManagerPanel() {
@@ -834,6 +956,14 @@ function openUserEditModal(accId) {
   $('ueUsername').value = acc.username || '';
   $('uePassword').value = '';
   $('ueError').textContent = '';
+
+  // Кнопка "Удалить аккаунт": только для филиалов и не для себя
+  const delBtn = $('ueDeleteBtn');
+  if (delBtn) {
+    const canDelete = acc.role !== 'manager' && acc.id !== state.currentUser.id;
+    delBtn.style.display = canDelete ? '' : 'none';
+  }
+
   openOverlay($('userEditModal'));
   setTimeout(() => $('ueName').focus(), 200);
 }
@@ -900,7 +1030,7 @@ function renderManagerLogs() {
 
   list.innerHTML = state.logs.slice(0, 200).map(log => {
     const info = LOG_TYPES[log.type] || { icon: '📌', label: log.type };
-    const cssClass = ['add','edit','delete','login','logout','qtyEdit','photoEdit','userEdit'].includes(log.type)
+    const cssClass = ['add','edit','delete','login','logout','qtyEdit','photoEdit','userEdit','targetEdit'].includes(log.type)
       ? 'log-' + log.type.toLowerCase()
       : 'log-other';
     const branchTag = log.branch ? `<span class="log-branch-tag">${BRANCH_LABELS[log.branch] || log.branch}</span>` : '';
@@ -1089,6 +1219,7 @@ function updateFilterBadge() {
    RENDER GRID
 =========================================================== */
 function renderAll() {
+  if (state.currentPage !== 'products') return;
   const myToken = ++renderToken;
   const list    = getFilteredProducts();
   $('statsText').textContent = `Товаров: ${list.length}`;
@@ -1111,6 +1242,7 @@ function renderAll() {
 function buildCard(product, index) {
   const branch = state.activeBranch;
   const qty    = getQty(product, branch);
+  const target = getTarget(product, branch);
   const status = getStockStatus(qty);
   const badge  = STOCK_BADGE[status];
   const delay  = Math.min(index * 35, 350);
@@ -1133,11 +1265,13 @@ function buildCard(product, index) {
   if (showAllBranches) {
     branchesHtml = BRANCH_KEYS.map(k => {
       const bqty = product.branches?.[k] ?? 0;
+      const btarget = product.targets?.[k] ?? 0;
       const cls  = bqty === 0 ? 'branch-row__qty--out' : bqty <= 3 ? 'branch-row__qty--low' : '';
+      const targetTag = btarget > 0 ? `<span class="branch-row__target">из ${btarget}</span>` : '';
       return `
         <div class="branch-row">
           <span class="branch-row__label">${BRANCH_LABELS[k]}</span>
-          <span class="branch-row__qty ${cls}">${bqty} шт</span>
+          <span class="branch-row__qty ${cls}">${bqty} шт ${targetTag}</span>
         </div>`;
     }).join('');
   } else {
@@ -1152,6 +1286,26 @@ function buildCard(product, index) {
   const totalText  = showAllBranches ? `${getQty(product)} шт` : `${qty} шт`;
   const totalLabel = showAllBranches ? 'Итого' : 'Остаток';
 
+  // Бейдж "Должно быть" — показываем когда выбран один филиал и норма задана
+  let targetHtml = '';
+  if (!showAllBranches && target > 0) {
+    const isMiss = qty < target;
+    targetHtml = `
+      <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
+        <span class="product-card__target-label">🎯 Норма</span>
+        <span class="product-card__target-value">${qty} / ${target}</span>
+      </div>`;
+  } else if (showAllBranches && getTarget(product) > 0) {
+    const totalQ = getQty(product);
+    const totalT = getTarget(product);
+    const isMiss = totalQ < totalT;
+    targetHtml = `
+      <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
+        <span class="product-card__target-label">🎯 Норма (всего)</span>
+        <span class="product-card__target-value">${totalQ} / ${totalT}</span>
+      </div>`;
+  }
+
   return `
     <div class="product-card ${blink}" data-id="${product.id}" style="animation-delay:${delay}ms">
       <div class="product-card__image-wrap">
@@ -1161,6 +1315,7 @@ function buildCard(product, index) {
       <div class="product-card__body">
         <div class="product-card__name">${escHtml(product.name)}</div>
         <div class="product-card__branches">${branchesHtml}</div>
+        ${targetHtml}
         <div class="product-card__footer">
           <span class="product-card__total-label">${totalLabel}</span>
           <span class="product-card__total-value">${totalText}</span>
@@ -1190,6 +1345,9 @@ function openEditModal(productId) {
     $('qty1').value     = p.branches?.branch1 ?? 0;
     $('qty2').value     = p.branches?.branch2 ?? 0;
     $('qty3').value     = p.branches?.branch3 ?? 0;
+    $('target1').value  = p.targets?.branch1 ?? 0;
+    $('target2').value  = p.targets?.branch2 ?? 0;
+    $('target3').value  = p.targets?.branch3 ?? 0;
     if (p.photo) {
       state.photoDataUrl                  = p.photo;
       $('photoPreview').src               = p.photo;
@@ -1197,21 +1355,22 @@ function openEditModal(productId) {
       $('photoPlaceholder').style.display = 'none';
       $('photoRemoveBtn').style.display   = 'block';
     }
-
     // Превью для staff
     $('staffProductName').textContent = p.name;
   } else {
     $('editName').value = '';
     $('editDesc').value = '';
     $('qty1').value = $('qty2').value = $('qty3').value = '0';
+    $('target1').value = $('target2').value = $('target3').value = '0';
     const sn = $('staffEditName'); if (sn) sn.value = '';
   }
 
   const manager = isManager();
 
-  // Менеджер: поля названия и описания всегда видны
-  // Сотрудник: поле названия видно при добавлении нового; при редактировании — только превью имени
+  // Менеджер: поля названия и описания + раздел "Должно быть"
+  // Сотрудник: при редактировании — только превью имени; при добавлении — поле названия
   $('managerFields').style.display    = manager ? '' : 'none';
+  $('targetSection').style.display    = manager ? '' : 'none';
   $('staffProductInfo').style.display = (!manager && productId) ? 'block' : 'none';
 
   // Поле названия для сотрудника при добавлении нового товара
@@ -1220,12 +1379,31 @@ function openEditModal(productId) {
     staffNameFieldWrap.style.display = (!manager && !productId) ? '' : 'none';
   }
 
-  // Показать удаление только менеджеру и только при редактировании
+  // Подсказка "Должно быть" для сотрудника — показывается только если редактируется
+  // существующий товар и норма задана менеджером
+  const staffTargetInfo = $('staffTargetInfo');
+  if (staffTargetInfo) {
+    if (!manager && productId) {
+      const p = state.products.find(pr => pr.id === productId);
+      const myBranch = userBranch();
+      const myTarget = p?.targets?.[myBranch] ?? 0;
+      if (myTarget > 0) {
+        $('staffTargetValue').textContent = `${myTarget} шт`;
+        staffTargetInfo.style.display = '';
+      } else {
+        staffTargetInfo.style.display = 'none';
+      }
+    } else {
+      staffTargetInfo.style.display = 'none';
+    }
+  }
+
+  // Удаление — только менеджер при редактировании
   const delBtn = $('editDeleteBtn');
   if (delBtn) delBtn.style.display = (manager && productId) ? '' : 'none';
 
   // Поля кол-ва: staff видит только свой филиал
-  document.querySelectorAll('.branch-qty-item').forEach(item => {
+  document.querySelectorAll('#branchesQtyGrid .branch-qty-item').forEach(item => {
     if (manager) {
       item.style.display = '';
     } else {
@@ -1233,11 +1411,52 @@ function openEditModal(productId) {
     }
   });
   $('branchesQtyTitle').textContent = manager
-    ? 'Остатки по филиалам (шт)'
-    : `Количество (${BRANCH_LABELS[userBranch()] || ''}, шт)`;
+    ? '📦 Остаток по филиалам (фактически, шт)'
+    : `📦 Остаток (${BRANCH_LABELS[userBranch()] || ''}, шт)`;
+
+  // Обновляем подсказки под полями остатков (норма vs факт)
+  updateStockHints();
+
+  // Один раз вешаем слушатели на input — для динамической подсказки
+  ['qty1','qty2','qty3','target1','target2','target3'].forEach(id => {
+    const el = $(id);
+    if (el && !el._hintListenerAttached) {
+      el.addEventListener('input', updateStockHints);
+      el._hintListenerAttached = true;
+    }
+  });
 
   openOverlay($('editModal'));
   if (manager) setTimeout(() => $('editName').focus(), 200);
+  else if (!productId) setTimeout(() => $('staffEditName')?.focus(), 200);
+}
+
+function updateStockHints() {
+  // Под каждым полем остатка пишем "норма: X" (зелёная если хватает, красная если меньше)
+  ['1','2','3'].forEach(i => {
+    const qtyEl    = $('qty' + i);
+    const targetEl = $('target' + i);
+    const hintEl   = $('qty' + i + 'Hint');
+    if (!qtyEl || !hintEl) return;
+
+    const qty    = parseInt(qtyEl.value, 10) || 0;
+    const target = parseInt(targetEl?.value, 10) || 0;
+
+    if (target <= 0) {
+      hintEl.textContent = '';
+      hintEl.className = 'branch-qty-target-hint';
+      return;
+    }
+
+    const diff = qty - target;
+    if (diff < 0) {
+      hintEl.textContent = `⚠ норма: ${target} (не хватает ${Math.abs(diff)})`;
+      hintEl.className = 'branch-qty-target-hint hint-low';
+    } else {
+      hintEl.textContent = `✓ норма: ${target}`;
+      hintEl.className = 'branch-qty-target-hint hint-ok';
+    }
+  });
 }
 
 async function saveProduct() {
@@ -1270,6 +1489,11 @@ async function saveProduct() {
         branch2: Math.max(0, parseInt($('qty2').value, 10) || 0),
         branch3: Math.max(0, parseInt($('qty3').value, 10) || 0),
       },
+      targets: {
+        branch1: Math.max(0, parseInt($('target1').value, 10) || 0),
+        branch2: Math.max(0, parseInt($('target2').value, 10) || 0),
+        branch3: Math.max(0, parseInt($('target3').value, 10) || 0),
+      },
     };
   } else {
     const myBranch = userBranch();
@@ -1294,11 +1518,14 @@ async function saveProduct() {
         description: '',
         photo:       state.photoDataUrl,
         branches,
+        targets:     { branch1: 0, branch2: 0, branch3: 0 }, // сотрудник нормы не задаёт
       };
     } else {
       if (!original) { showToast('⛔ Товар не найден', 'error'); return; }
+      // ВАЖНО: сотрудник не может менять targets — копируем из оригинала
       product = {
         ...original,
+        targets: original.targets || { branch1: 0, branch2: 0, branch3: 0 },
         photo: state.photoDataUrl,
         branches: {
           ...original.branches,
@@ -1313,24 +1540,98 @@ async function saveProduct() {
     if (idx > -1) state.products[idx] = product;
 
     if (manager) {
-      await writeLog('edit', `"${product.name}"`);
+      // Логируем отдельно изменение нормы (targets) — для отчётов
+      let targetChanged = false;
+      const targetChanges = [];
+      if (original) {
+        BRANCH_KEYS.forEach(k => {
+          const oldT = original.targets?.[k] ?? 0;
+          const newT = product.targets[k] ?? 0;
+          if (oldT !== newT) {
+            targetChanged = true;
+            targetChanges.push(`${BRANCH_LABELS[k]}: ${oldT}→${newT}`);
+          }
+        });
+      }
+      if (targetChanged) {
+        await writeLog('targetEdit', `"${product.name}" — норма: ${targetChanges.join(', ')}`, {
+          productId:   product.id,
+          productName: product.name,
+        });
+      }
+      // Если менеджер изменил фото при редактировании — записываем в галерею
+      const mgrPhotoChanged = (original?.photo || null) !== (product.photo || null);
+      if (mgrPhotoChanged && product.photo) {
+        await fbAddPhotoHistory({
+          id:          uid(),
+          productId:   product.id,
+          productName: product.name,
+          photo:       product.photo,
+          branch:      'manager', // помечаем как загруженное менеджером
+          userId:      state.currentUser.id,
+          userName:    state.currentUser.name || state.currentUser.username,
+          ts:          Date.now(),
+        });
+      }
+      await writeLog('edit', `"${product.name}"`, {
+        productId:   product.id,
+        productName: product.name,
+      });
     } else {
       const myBranch = userBranch();
       const oldQty = original?.branches?.[myBranch] ?? 0;
       const newQty = product.branches[myBranch];
+      const target = original?.targets?.[myBranch] ?? 0;
       const photoChanged = (original?.photo || null) !== (product.photo || null);
       if (oldQty !== newQty) {
-        await writeLog('qtyEdit', `"${product.name}": ${oldQty} → ${newQty} шт`);
+        await writeLog('qtyEdit', `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма: ${target})` : ''}`, {
+          productId:   product.id,
+          productName: product.name,
+          oldQty, newQty, target,
+        });
       }
       if (photoChanged) {
-        await writeLog('photoEdit', `"${product.name}"`);
+        await writeLog('photoEdit', `"${product.name}"`, {
+          productId:   product.id,
+          productName: product.name,
+        });
+        // Сотрудник изменил фото — записываем в галерею
+        if (product.photo) {
+          await fbAddPhotoHistory({
+            id:          uid(),
+            productId:   product.id,
+            productName: product.name,
+            photo:       product.photo,
+            branch:      myBranch,
+            userId:      state.currentUser.id,
+            userName:    state.currentUser.name || state.currentUser.username,
+            ts:          Date.now(),
+          });
+        }
       }
     }
     showToast('✓ Сохранено', 'success');
   } else {
     state.products.unshift(product);
     showToast('✓ Товар добавлен', 'success');
-    await writeLog('add', `"${product.name}"`);
+    await writeLog('add', `"${product.name}"`, {
+      productId:   product.id,
+      productName: product.name,
+    });
+    // Если при создании товара сразу было фото — пишем в галерею
+    if (product.photo) {
+      const branchForPhoto = manager ? 'manager' : userBranch();
+      await fbAddPhotoHistory({
+        id:          uid(),
+        productId:   product.id,
+        productName: product.name,
+        photo:       product.photo,
+        branch:      branchForPhoto,
+        userId:      state.currentUser.id,
+        userName:    state.currentUser.name || state.currentUser.username,
+        ts:          Date.now(),
+      });
+    }
   }
 
   saveLocal(STORAGE_KEY, state.products);
@@ -1360,7 +1661,7 @@ async function deleteProduct(productId) {
     saveLocal(STORAGE_KEY, state.products);
     renderAll();
     showToast(`✓ "${name}" удалён`, 'success');
-    await writeLog('delete', `"${name}"`);
+    await writeLog('delete', `"${name}"`, { productId, productName: name });
     await fbDeleteProduct(productId);
   }
 }
@@ -1473,6 +1774,8 @@ function initSteppers() {
       if (btn.dataset.action === 'plus')  val++;
       if (btn.dataset.action === 'minus') val = Math.max(0, val - 1);
       input.value = val;
+      // Триггерим input event — для динамических подсказок под полями
+      input.dispatchEvent(new Event('input', { bubbles: true }));
     });
   });
 }
@@ -1499,10 +1802,10 @@ function preparePrint() {
   if (showAll) {
     thead.innerHTML = `
       <th style="width:60px">Фото</th><th>Товар</th><th>Категория</th>
-      ${BRANCH_KEYS.map(k => `<th style="text-align:center">${BRANCH_LABELS[k]}</th>`).join('')}
+      ${BRANCH_KEYS.map(k => `<th style="text-align:center">${BRANCH_LABELS[k]}<br><small style="font-weight:400;color:#888">факт / норма</small></th>`).join('')}
       <th>Итого</th>`;
   } else {
-    thead.innerHTML = `<th style="width:60px">Фото</th><th>Товар</th><th>Категория</th><th style="text-align:center">Количество</th>`;
+    thead.innerHTML = `<th style="width:60px">Фото</th><th>Товар</th><th>Категория</th><th style="text-align:center">Факт</th><th style="text-align:center">Норма</th>`;
   }
 
   $('printTableBody').innerHTML = list.map(p => {
@@ -1513,12 +1816,14 @@ function preparePrint() {
     if (showAll) {
       const cells = BRANCH_KEYS.map(k => {
         const q = p.branches?.[k] ?? 0;
-        return `<td style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q}</td>`;
+        const t = p.targets?.[k] ?? 0;
+        return `<td style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q}${t > 0 ? ' / ' + t : ''}</td>`;
       }).join('');
       dataCells = `${cells}<td class="print-td-total">${getQty(p)} шт</td>`;
     } else {
       const q = p.branches?.[state.activeBranch] ?? 0;
-      dataCells = `<td class="print-td-total" style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q} шт</td>`;
+      const t = p.targets?.[state.activeBranch] ?? 0;
+      dataCells = `<td class="print-td-total" style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q} шт</td><td style="text-align:center;color:#8a4d04">${t > 0 ? t + ' шт' : '—'}</td>`;
     }
     return `
       <tr>
@@ -1592,6 +1897,13 @@ function initProductEvents() {
 
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
+    // Закрываем lightbox если открыт
+    const lightbox = $('lightboxOverlay');
+    if (lightbox && lightbox.classList.contains('active')) {
+      lightbox.classList.remove('active');
+      if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
+      return;
+    }
     const open = document.querySelectorAll('.modal-overlay.active');
     if (open.length) {
       const last = open[open.length - 1];
@@ -1599,6 +1911,301 @@ function initProductEvents() {
       if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
     }
   });
+}
+
+/* ===========================================================
+   PAGE NAVIGATION (Товары / Отчёты)
+=========================================================== */
+function initPageNavigation() {
+  document.querySelectorAll('.drawer-nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = btn.dataset.page;
+      if (!page) return;
+      // Защита: на отчёты — только менеджер
+      if (page === 'reports' && !isManager()) {
+        showToast('⛔ Отчёты доступны только менеджеру', 'error');
+        return;
+      }
+      // Закрываем drawer
+      $('drawerOverlay').classList.remove('active');
+      document.body.style.overflow = '';
+      setTimeout(() => switchPage(page), 200);
+    });
+  });
+}
+
+function switchPage(page) {
+  state.currentPage = page;
+
+  // Подсветка активного пункта в drawer
+  document.querySelectorAll('.drawer-nav-item').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === page);
+  });
+
+  // Показ/скрытие страниц
+  ['products', 'gallery', 'reports'].forEach(p => {
+    const id = 'page' + p.charAt(0).toUpperCase() + p.slice(1);
+    const el = $(id);
+    if (!el) return;
+    if (p === page) {
+      el.style.display = '';
+      el.classList.add('active');
+    } else {
+      el.style.display = 'none';
+      el.classList.remove('active');
+    }
+  });
+
+  // Toolbar (фильтр товаров) показываем только на странице товаров
+  const toolbar = $('mainToolbar');
+  if (toolbar) toolbar.style.display = (page === 'products') ? '' : 'none';
+
+  // FAB добавления товара — только для сотрудника на странице товаров
+  const fab = $('fabAddBtn');
+  if (fab) {
+    fab.style.display = (page === 'products' && isStaff()) ? 'flex' : 'none';
+  }
+
+  if (page === 'products')      renderAll();
+  else if (page === 'gallery')  renderGalleryPage();
+  else if (page === 'reports')  renderReportsPage();
+}
+
+/* ===========================================================
+   REPORTS PAGE — кто что менял (только менеджер)
+=========================================================== */
+function initReportsEvents() {
+  document.querySelectorAll('#reportsFilters .reports-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#reportsFilters .reports-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.reportsFilter = btn.dataset.rfilter;
+      renderReportsPage();
+    });
+  });
+}
+
+function getReportsLogs() {
+  // Только логи, связанные с действиями над товарами
+  const reportTypes = new Set(['qtyEdit', 'photoEdit', 'add', 'edit', 'delete', 'targetEdit']);
+  let list = state.logs.filter(l => reportTypes.has(l.type));
+
+  if (state.reportsFilter !== 'all') {
+    list = list.filter(l => l.branch === state.reportsFilter);
+  }
+
+  return list;
+}
+
+function renderReportsPage() {
+  if (!isManager()) return;
+  const listEl  = $('reportsList');
+  const emptyEl = $('reportsEmpty');
+  const sumEl   = $('reportsSummary');
+  if (!listEl) return;
+
+  // === Сводные карточки ===
+  const allReportLogs = state.logs.filter(l =>
+    ['qtyEdit', 'photoEdit', 'add', 'edit', 'delete', 'targetEdit'].includes(l.type)
+  );
+  const last24h    = Date.now() - 24 * 60 * 60 * 1000;
+  const recent     = allReportLogs.filter(l => l.ts > last24h);
+  const qtyChanges = allReportLogs.filter(l => l.type === 'qtyEdit').length;
+  const photoChanges = allReportLogs.filter(l => l.type === 'photoEdit').length;
+
+  // Отдельный счётчик "не хватает по норме" — на основе текущих остатков
+  let missingCount = 0;
+  state.products.forEach(p => {
+    BRANCH_KEYS.forEach(k => {
+      const q = p.branches?.[k] ?? 0;
+      const t = p.targets?.[k] ?? 0;
+      if (t > 0 && q < t) missingCount++;
+    });
+  });
+
+  sumEl.innerHTML = `
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Всего записей</div>
+      <div class="reports-summary-card__value">${allReportLogs.length}</div>
+    </div>
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">За 24 часа</div>
+      <div class="reports-summary-card__value reports-summary-card__value--accent">${recent.length}</div>
+    </div>
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Изменений кол-ва</div>
+      <div class="reports-summary-card__value reports-summary-card__value--success">${qtyChanges}</div>
+    </div>
+    <div class="reports-summary-card">
+      <div class="reports-summary-card__label">Не хватает (по норме)</div>
+      <div class="reports-summary-card__value reports-summary-card__value--danger">${missingCount}</div>
+    </div>
+  `;
+
+  // === Список карточек ===
+  const list = getReportsLogs();
+
+  if (!list.length) {
+    listEl.innerHTML = '';
+    emptyEl.style.display = 'flex';
+    return;
+  }
+  emptyEl.style.display = 'none';
+
+  listEl.innerHTML = list.slice(0, 200).map((log, i) => {
+    const info = LOG_TYPES[log.type] || { icon: '📌', label: log.type };
+    const iconCls = `report-card__icon--${log.type === 'qtyEdit' ? 'qty' : log.type === 'photoEdit' ? 'photo' : log.type === 'targetEdit' ? 'target' : log.type}`;
+    const branchTag = log.branch ? `<span class="report-card__branch">${escHtml(BRANCH_LABELS[log.branch] || log.branch)}</span>` : '';
+    const delay = Math.min(i * 20, 250);
+
+    let body = '';
+    if (log.type === 'qtyEdit' && log.oldQty !== undefined && log.newQty !== undefined) {
+      const target = log.target || 0;
+      const isMiss = target > 0 && log.newQty < target;
+      const targetTag = target > 0
+        ? (isMiss
+            ? `<span class="deficit-badge deficit-badge--miss">не хватает ${target - log.newQty} шт</span>`
+            : `<span class="deficit-badge deficit-badge--ok">норма выполнена</span>`)
+        : '';
+      body = `
+        <div class="report-card__action">
+          ${escHtml(info.label)}: <span class="report-card__product">${escHtml(log.productName || '—')}</span>
+        </div>
+        <div class="report-card__change ${isMiss ? 'report-card__change--miss' : ''}">
+          <span class="report-card__change-old">${log.oldQty} шт</span>
+          <span class="report-card__change-arrow">→</span>
+          <span class="report-card__change-new">${log.newQty} шт</span>
+          ${target > 0 ? `<span class="report-card__change-arrow">/</span><span class="report-card__change-target">норма ${target}</span>` : ''}
+          ${targetTag}
+        </div>
+      `;
+    } else {
+      body = `<div class="report-card__action">${escHtml(info.label)}${log.details ? ' — ' + escHtml(log.details) : ''}</div>`;
+    }
+
+    return `
+      <div class="report-card" style="animation-delay:${delay}ms">
+        <div class="report-card__head">
+          <div class="report-card__icon ${iconCls}">${info.icon}</div>
+          <span class="report-card__user">${escHtml(log.userName || 'Неизвестно')}</span>
+          ${branchTag}
+          <span class="report-card__time">${formatRelative(log.ts)}</span>
+        </div>
+        <div class="report-card__body">
+          ${body}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ===========================================================
+   GALLERY PAGE — фотографии товаров с указанием филиала и даты
+=========================================================== */
+function initGalleryEvents() {
+  document.querySelectorAll('#galleryFilters .reports-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#galleryFilters .reports-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.galleryFilter = btn.dataset.gfilter;
+      renderGalleryPage();
+    });
+  });
+}
+
+function getFilteredPhotos() {
+  let list = [...state.photoHistory];
+  if (isStaff()) {
+    // Сотрудник видит только фото своего филиала (включая фото, загруженные менеджером для его товаров — но мы пишем branch=manager для менеджерских)
+    const me = userBranch();
+    list = list.filter(p => p.branch === me);
+  } else {
+    // Менеджер видит все, с фильтром по выбранному филиалу
+    if (state.galleryFilter !== 'all') {
+      list = list.filter(p => p.branch === state.galleryFilter);
+    }
+  }
+  return list;
+}
+
+function renderGalleryPage() {
+  const grid    = $('galleryGrid');
+  const empty   = $('galleryEmpty');
+  const subText = $('galleryPageSub');
+  if (!grid) return;
+
+  // Подзаголовок страницы
+  if (subText) {
+    if (isStaff()) {
+      subText.textContent = `Фото товаров филиала «${BRANCH_LABELS[userBranch()]}»`;
+    } else {
+      subText.textContent = state.galleryFilter === 'all'
+        ? 'Все фотографии со всех филиалов'
+        : `Фото с филиала «${BRANCH_LABELS[state.galleryFilter] || 'Менеджер'}»`;
+    }
+  }
+
+  const list = getFilteredPhotos();
+
+  if (!list.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = list.map((entry, i) => {
+    const delay = Math.min(i * 25, 300);
+    const branchLabel = entry.branch === 'manager'
+      ? '👑 Менеджер'
+      : (BRANCH_LABELS[entry.branch] || entry.branch);
+    return `
+      <div class="gallery-card" data-photo-id="${escHtml(entry.id)}" style="animation-delay:${delay}ms">
+        <div class="gallery-card__image-wrap">
+          <img class="gallery-card__image" src="${entry.photo}" alt="${escHtml(entry.productName)}" loading="lazy"/>
+          <span class="gallery-card__branch-badge">${escHtml(branchLabel)}</span>
+        </div>
+        <div class="gallery-card__body">
+          <div class="gallery-card__name">${escHtml(entry.productName)}</div>
+          <div class="gallery-card__date">📅 ${formatDateTime(entry.ts)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.gallery-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.photoId;
+      const entry = state.photoHistory.find(p => p.id === id);
+      if (entry) openLightbox(entry);
+    });
+  });
+}
+
+/* ===========================================================
+   LIGHTBOX — просмотр фото на весь экран
+=========================================================== */
+function initLightbox() {
+  const overlay = $('lightboxOverlay');
+  if (!overlay) return;
+  $('lightboxClose').addEventListener('click', closeLightbox);
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) closeLightbox();
+  });
+}
+
+function openLightbox(entry) {
+  $('lightboxImg').src = entry.photo;
+  $('lightboxName').textContent = entry.productName;
+  const branchLabel = entry.branch === 'manager'
+    ? '👑 Менеджер'
+    : (BRANCH_LABELS[entry.branch] || entry.branch);
+  $('lightboxMeta').textContent = `${branchLabel} • ${entry.userName} • ${formatDateTime(entry.ts)}`;
+  $('lightboxOverlay').classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  $('lightboxOverlay').classList.remove('active');
+  if (!document.querySelector('.modal-overlay.active')) document.body.style.overflow = '';
 }
 
 /* ===========================================================
