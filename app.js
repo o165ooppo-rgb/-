@@ -175,6 +175,9 @@ const state = {
   reportsBranchFilter: 'all',
   reportsCategoryFilter: 'all',
   reportsSearchQuery: '',
+  expandedProductIds: new Set(),       // id товаров, у которых раскрыта inline-панель
+  inlinePhotos: new Map(),             // id → dataUrl (фото, прикреплённое в inline-панели)
+  pendingPhotoForProductId: null,      // id товара, для которого сейчас выбираем фото
 };
 
 /* ===========================================================
@@ -636,6 +639,7 @@ function enterApp() {
     initGalleryEvents();
     initReportsEvents();
     initLightbox();
+    initPhotoChoiceSheet();
     enterApp._initialized = true;
   }
 
@@ -1276,34 +1280,88 @@ function renderAll() {
 
   $('emptyState').style.display = 'none';
   $('productsGrid').innerHTML = list.map((p, i) => buildCard(p, i)).join('');
+
+  // Клик по карточке: менеджеру — открывает форму редактирования,
+  // сотруднику — раскрывает inline-панель (аккордеон) для ввода остатка.
   $('productsGrid').querySelectorAll('.product-card').forEach(card => {
     card.addEventListener('click', e => {
-      // Если клик по кнопке "Доказать" — отдельный handler ниже не сработает,
-      // событие сначала обработает кнопка благодаря stopPropagation. Здесь —
-      // дефолтное действие: менеджеру форма редактирования, сотруднику — proof.
+      // Игнорируем клики на интерактивных элементах внутри карточки
+      if (e.target.closest('.product-card__camera-btn')) return;
+      if (e.target.closest('.product-card__inline-panel')) return;
       const id = card.dataset.id;
-      if (isManager()) openEditModal(id);
-      else openProofModal(id);
+      if (isManager()) {
+        openEditModal(id);
+      } else {
+        toggleInlinePanel(id);
+      }
     });
   });
-  // Кнопки "Доказать" — только для сотрудника, останавливаем bubbling
-  $('productsGrid').querySelectorAll('.product-card__prove-btn').forEach(btn => {
+
+  // Иконка камеры (только сотрудник) — открываем выбор «камера или галерея»
+  $('productsGrid').querySelectorAll('.product-card__camera-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const id = btn.dataset.id;
-      openProofModal(id);
+      openInlinePhotoChoice(id);
     });
   });
+
+  // Inline-стэппер плюс/минус
+  $('productsGrid').querySelectorAll('.inline-stepper__btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.pid;
+      const action = btn.dataset.inlineAction;
+      const input = document.querySelector(`[data-inline-input="${id}"]`);
+      if (!input) return;
+      let v = parseInt(input.value, 10) || 0;
+      v = action === 'plus' ? v + 1 : Math.max(0, v - 1);
+      input.value = v;
+      updateInlineHint(id);
+    });
+  });
+
+  // Inline-input — обновляем подсказку при ручном вводе
+  $('productsGrid').querySelectorAll('[data-inline-input]').forEach(inp => {
+    inp.addEventListener('input', () => updateInlineHint(inp.dataset.inlineInput));
+    inp.addEventListener('click', e => e.stopPropagation());
+  });
+  $('productsGrid').querySelectorAll('[data-inline-comment]').forEach(t => {
+    t.addEventListener('click', e => e.stopPropagation());
+  });
+
+  // Кнопка «Сохранить» в inline-панели
+  $('productsGrid').querySelectorAll('[data-inline-save]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.inlineSave;
+      submitInlineProof(id);
+    });
+  });
+  // Кнопка «Отмена» в inline-панели
+  $('productsGrid').querySelectorAll('[data-inline-cancel]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.inlineCancel;
+      closeInlinePanel(id);
+    });
+  });
+
+  // Восстанавливаем уже открытые панели после ререндера
+  if (state.expandedProductIds && state.expandedProductIds.size) {
+    state.expandedProductIds.forEach(id => {
+      const card = document.querySelector(`.product-card[data-id="${id}"]`);
+      if (card) card.classList.add('is-expanded');
+      updateInlineHint(id);
+    });
+  }
 }
 
 function buildCard(product, index) {
   const branch = state.activeBranch;
   const qty    = getQty(product, branch);
   const target = getTarget(product, branch);
-  const status = getStockStatus(qty);
-  const badge  = STOCK_BADGE[status];
   const delay  = Math.min(index * 35, 350);
-  const blink  = status === 'out' ? 'product-card--out' : status === 'low' ? 'product-card--low' : '';
 
   const imageHtml = product.photo
     ? `<img class="product-card__image" src="${product.photo}" alt="${escHtml(product.name)}" loading="lazy" />`
@@ -1333,7 +1391,6 @@ function buildCard(product, index) {
     }).join('');
   } else {
     const cls = qty === 0 ? 'branch-row__qty--out' : qty <= 3 ? 'branch-row__qty--low' : '';
-    // Для сотрудника — НЕ показываем название филиала (зачем, он его и так видит в шапке)
     const branchLabel = isManager() ? BRANCH_LABELS[branch] : 'Остаток';
     branchesHtml = `
       <div class="branch-row">
@@ -1369,51 +1426,67 @@ function buildCard(product, index) {
   const cat = product.category || 'other';
   const catHtml = `<div class="product-card__cat-badge">${CATEGORY_EMOJI[cat] || '📦'} ${escHtml(CATEGORY_LABELS[cat] || cat)}</div>`;
 
-  // Последний отчёт от сотрудника моего филиала (для самого сотрудника)
-  let lastProofHtml = '';
+  // Иконка камеры (только для сотрудника) — на месте старого бейджа статуса
+  let cameraBtnHtml = '';
   if (isStaff()) {
-    const myBranch = userBranch();
-    const lastProof = state.proofs.find(pr => pr.productId === product.id && pr.branch === myBranch);
-    if (lastProof) {
-      lastProofHtml = `
-        <div class="product-card__last-proof">
-          <span class="product-card__last-proof-icon">✅</span>
-          <span>Отчёт отправлен ${formatRelative(lastProof.ts)}: ${lastProof.qty} шт</span>
-        </div>`;
-    }
-  }
-
-  // Кнопка "Доказать" — только для сотрудника
-  let proveBtnHtml = '';
-  if (isStaff()) {
-    proveBtnHtml = `
-      <button class="product-card__prove-btn" data-id="${product.id}">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    cameraBtnHtml = `
+      <button class="product-card__camera-btn" data-id="${product.id}" title="Сделать фото-доказательство" aria-label="Сделать фото">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
           <circle cx="12" cy="13" r="4"/>
         </svg>
-        Доказать остаток
       </button>`;
   }
 
+  // Inline-панель «аккордеон» — раскрывается при клике (только для сотрудника)
+  let inlinePanelHtml = '';
+  if (isStaff()) {
+    inlinePanelHtml = `
+      <div class="product-card__inline-panel" data-panel-for="${product.id}">
+        <div class="product-card__inline-inner">
+          <div class="inline-field">
+            <label class="inline-field__label">📦 Фактический остаток (шт)</label>
+            <div class="inline-stepper">
+              <button class="inline-stepper__btn" data-inline-action="minus" data-pid="${product.id}">−</button>
+              <input type="number" class="inline-stepper__input" data-inline-input="${product.id}" value="${qty}" min="0" inputmode="numeric"/>
+              <button class="inline-stepper__btn" data-inline-action="plus" data-pid="${product.id}">+</button>
+            </div>
+            <div class="inline-field__hint" data-inline-hint="${product.id}"></div>
+          </div>
+          <div class="inline-field">
+            <label class="inline-field__label">📝 Комментарий <span style="color:var(--text-muted);font-weight:400">(необязательно)</span></label>
+            <textarea class="inline-field__textarea" data-inline-comment="${product.id}" rows="2" placeholder="Например: одна сломалась, выбросил..."></textarea>
+          </div>
+          <div class="inline-actions">
+            <button class="inline-btn inline-btn--cancel" data-inline-cancel="${product.id}">Отмена</button>
+            <button class="inline-btn inline-btn--save" data-inline-save="${product.id}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Сохранить
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   return `
-    <div class="product-card ${blink}" data-id="${product.id}" style="animation-delay:${delay}ms">
+    <div class="product-card" data-id="${product.id}" style="animation-delay:${delay}ms">
       <div class="product-card__image-wrap">
         ${imageHtml}
-        <div class="product-card__badge ${badge.cls}">${badge.label}</div>
+        ${cameraBtnHtml}
       </div>
       <div class="product-card__body">
         ${catHtml}
         <div class="product-card__name">${escHtml(product.name)}</div>
         <div class="product-card__branches">${branchesHtml}</div>
         ${targetHtml}
-        ${lastProofHtml}
         <div class="product-card__footer">
           <span class="product-card__total-label">${totalLabel}</span>
           <span class="product-card__total-value">${totalText}</span>
         </div>
-        ${proveBtnHtml}
       </div>
+      ${inlinePanelHtml}
     </div>`;
 }
 
@@ -1935,8 +2008,183 @@ function switchPage(page) {
 }
 
 /* ===========================================================
-   PROOF MODAL — сотрудник доказывает остаток фотографией
+   INLINE PANEL (аккордеон) — сотрудник доказывает остаток
+   прямо под карточкой товара, без модального окна
 =========================================================== */
+function toggleInlinePanel(productId) {
+  const card = document.querySelector(`.product-card[data-id="${productId}"]`);
+  if (!card) return;
+  if (state.expandedProductIds.has(productId)) {
+    closeInlinePanel(productId);
+  } else {
+    state.expandedProductIds.add(productId);
+    card.classList.add('is-expanded');
+    updateInlineHint(productId);
+    // Скроллим карточку в обзор, чтобы панель влезла
+    setTimeout(() => {
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 250);
+  }
+}
+
+function closeInlinePanel(productId) {
+  state.expandedProductIds.delete(productId);
+  state.inlinePhotos.delete(productId);
+  const card = document.querySelector(`.product-card[data-id="${productId}"]`);
+  if (card) card.classList.remove('is-expanded');
+}
+
+function updateInlineHint(productId) {
+  const product = state.products.find(p => p.id === productId);
+  if (!product) return;
+  const myBranch = userBranch();
+  const target = product.targets?.[myBranch] ?? 0;
+  const inp = document.querySelector(`[data-inline-input="${productId}"]`);
+  const hint = document.querySelector(`[data-inline-hint="${productId}"]`);
+  if (!inp || !hint) return;
+  const qty = parseInt(inp.value, 10) || 0;
+  if (target <= 0) {
+    hint.textContent = '';
+    hint.className = 'inline-field__hint';
+    return;
+  }
+  const diff = qty - target;
+  if (diff < 0) {
+    hint.textContent = `⚠ должно быть ${target}, не хватает ${Math.abs(diff)}`;
+    hint.className = 'inline-field__hint hint-low';
+  } else if (diff === 0) {
+    hint.textContent = `✓ всё на месте (норма ${target})`;
+    hint.className = 'inline-field__hint hint-ok';
+  } else {
+    hint.textContent = `✓ норма ${target}, у вас на ${diff} больше`;
+    hint.className = 'inline-field__hint hint-ok';
+  }
+}
+
+// Открываем выбор «Камера / Галерея» для товара (как в Telegram при отправке фото)
+function openInlinePhotoChoice(productId) {
+  // Если карточка ещё не раскрыта — раскрываем её, чтобы пользователь видел поля
+  if (!state.expandedProductIds.has(productId)) {
+    toggleInlinePanel(productId);
+  }
+  state.pendingPhotoForProductId = productId;
+  // Показываем bottom-sheet выбора источника
+  const sheet = $('photoChoiceSheet');
+  if (sheet) sheet.classList.add('active');
+}
+
+async function submitInlineProof(productId) {
+  const product = state.products.find(p => p.id === productId);
+  if (!product) { showToast('⚠ Товар не найден', 'error'); return; }
+
+  const photo = state.inlinePhotos.get(productId);
+  if (!photo) {
+    showToast('📸 Сначала сфотографируйте товар (нажмите на иконку камеры)', 'error');
+    return;
+  }
+
+  const inp = document.querySelector(`[data-inline-input="${productId}"]`);
+  const cmt = document.querySelector(`[data-inline-comment="${productId}"]`);
+  const qty = Math.max(0, parseInt(inp?.value, 10) || 0);
+  const comment = (cmt?.value || '').trim();
+  const myBranch = userBranch();
+  const target = product.targets?.[myBranch] ?? 0;
+  const oldQty = product.branches?.[myBranch] ?? 0;
+
+  const proofEntry = {
+    id:          uid(),
+    productId:   product.id,
+    productName: product.name,
+    category:    product.category || 'other',
+    photo,
+    qty,
+    target,
+    branch:      myBranch,
+    userId:      state.currentUser.id,
+    userName:    state.currentUser.name || state.currentUser.username,
+    comment,
+    ts:          Date.now(),
+  };
+
+  const saveBtn = document.querySelector(`[data-inline-save="${productId}"]`);
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
+    await fbAddProof(proofEntry);
+
+    const updated = {
+      ...product,
+      branches: { ...product.branches, [myBranch]: qty },
+    };
+    const idx = state.products.findIndex(p => p.id === product.id);
+    if (idx > -1) state.products[idx] = updated;
+    saveLocal(STORAGE_KEY, state.products);
+    await fbSaveProduct(updated);
+
+    await writeLog('proofSubmit',
+      `"${product.name}": ${qty} шт${target ? ` / норма ${target}` : ''}` +
+      (comment ? ` — ${comment}` : ''),
+      { productId: product.id, productName: product.name, oldQty, newQty: qty, target });
+
+    showToast('✓ Отчёт отправлен менеджеру', 'success');
+    closeInlinePanel(productId);
+  } catch (err) {
+    console.error('Inline proof error', err);
+    showToast('⚠ Ошибка отправки отчёта', 'error');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+// Инициализация bottom-sheet выбора «Камера / Галерея»
+function initPhotoChoiceSheet() {
+  const sheet = $('photoChoiceSheet');
+  if (!sheet) return;
+
+  const close = () => {
+    sheet.classList.remove('active');
+    state.pendingPhotoForProductId = null;
+  };
+
+  $('photoChoiceCancel').addEventListener('click', close);
+  sheet.addEventListener('click', e => {
+    if (e.target === sheet) close();
+  });
+
+  const fileInput = $('inlinePhotoInput');
+
+  $('photoChoiceCamera').addEventListener('click', () => {
+    fileInput.setAttribute('capture', 'environment');
+    fileInput.click();
+  });
+  $('photoChoiceGallery').addEventListener('click', () => {
+    fileInput.removeAttribute('capture');
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', async e => {
+    const file = e.target.files?.[0];
+    const pid = state.pendingPhotoForProductId;
+    fileInput.value = '';
+    close();
+    if (!file || !pid) return;
+    try {
+      const dataUrl = await compressImage(file);
+      state.inlinePhotos.set(pid, dataUrl);
+      // Подсвечиваем карточку — фото готово
+      const card = document.querySelector(`.product-card[data-id="${pid}"]`);
+      if (card) card.classList.add('has-photo');
+      // Раскрываем панель если ещё не раскрыта
+      if (!state.expandedProductIds.has(pid)) toggleInlinePanel(pid);
+      showToast('📸 Фото готово — введите остаток и сохраните', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('⚠ Ошибка загрузки фото', 'error');
+    }
+  });
+}
+
+
 function initProofPhotoUpload() {
   const input    = $('proofPhotoInput');
   const camBtn   = $('proofBtnCamera');
