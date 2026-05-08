@@ -835,13 +835,15 @@
       <!-- Поле остатка -->
       <div class="branches-qty-section">
         <h3 class="branches-qty-title">📦 Введите фактический остаток (шт)</h3>
-        <div class="proof-qty-wrap">
-          <div class="qty-stepper qty-stepper--big">
-            <button class="qty-btn" data-action="minus" data-target="proofQty">−</button>
-            <input type="number" id="proofQty" class="qty-input qty-input--big" value="0" min="0" inputmode="numeric"/>
-            <button class="qty-btn" data-action="plus" data-target="proofQty">+</button>
+        <div class="branches-qty-grid">
+          <div class="branch-qty-item">
+            <div class="qty-stepper qty-stepper--big">
+              <button class="qty-btn" data-action="minus" data-target="proofQty">−</button>
+              <input type="number" id="proofQty" class="qty-input qty-input--big" value="0" min="0" inputmode="numeric"/>
+              <button class="qty-btn" data-action="plus" data-target="proofQty">+</button>
+            </div>
+            <div class="branch-qty-target-hint" id="proofQtyHint"></div>
           </div>
-          <div class="branch-qty-target-hint" id="proofQtyHint"></div>
         </div>
       </div>
 
@@ -901,6 +903,30 @@
         <button class="btn-delete-confirm" id="accountDeleteConfirmBtn">Удалить</button>
       </div>
     </div>
+  </div>
+
+  <!-- ===== PHOTO CHOICE SHEET (Telegram-like): камера или галерея ===== -->
+  <div class="photo-choice-sheet" id="photoChoiceSheet">
+    <div class="photo-choice-sheet__panel">
+      <div class="photo-choice-sheet__handle"></div>
+      <div class="photo-choice-sheet__title">Откуда взять фото?</div>
+      <button class="photo-choice-sheet__btn" id="photoChoiceCamera">
+        <span class="photo-choice-sheet__icon">📷</span>
+        <span class="photo-choice-sheet__text">
+          <span class="photo-choice-sheet__label">Сделать фото</span>
+          <span class="photo-choice-sheet__sub">Открыть камеру</span>
+        </span>
+      </button>
+      <button class="photo-choice-sheet__btn" id="photoChoiceGallery">
+        <span class="photo-choice-sheet__icon">🖼️</span>
+        <span class="photo-choice-sheet__text">
+          <span class="photo-choice-sheet__label">Выбрать из галереи</span>
+          <span class="photo-choice-sheet__sub">Готовое фото из памяти телефона</span>
+        </span>
+      </button>
+      <button class="photo-choice-sheet__cancel" id="photoChoiceCancel">Отмена</button>
+    </div>
+    <input type="file" id="inlinePhotoInput" accept="image/*" style="display:none"/>
   </div>
 
   <!-- ===== TOAST ===== -->
