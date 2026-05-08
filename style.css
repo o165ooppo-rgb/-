@@ -4065,3 +4065,116 @@ body.role-staff .drawer-item--branch { display: none !important; }
     padding: 0 36px;
   }
 }
+
+/* ============================================================
+   ===== ФИКС: раскрытая карточка занимает всю ширину =====
+   Чтобы степпер, кнопки и комментарий помещались.
+============================================================ */
+.product-card.is-expanded {
+  grid-column: 1 / -1;       /* занимаем всю строку сетки */
+  max-width: 100%;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgba(24, 119, 242, 0.18);
+  border: 1.5px solid var(--accent);
+  z-index: 2;
+  position: relative;
+}
+
+/* На мобильном раскрытая карточка остаётся вертикальной (фото сверху, поля снизу) */
+.product-card.is-expanded .product-card__image-wrap {
+  aspect-ratio: 16 / 10;     /* фото становится шире/ниже, чтобы влезло больше полей */
+}
+
+/* Кнопка-крестик закрытия в углу раскрытой карточки */
+.product-card__close-expanded {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  display: none;
+  place-items: center;
+  cursor: pointer;
+  z-index: 6;
+  transition: background var(--t-fast), transform var(--t-fast);
+}
+.product-card.is-expanded .product-card__close-expanded { display: grid; }
+.product-card__close-expanded:hover { background: var(--danger); transform: scale(1.05); }
+.product-card__close-expanded svg { width: 18px; height: 18px; }
+
+/* Inline-панель: убираем градиент-заливку, делаем чистый белый фон */
+.product-card.is-expanded .product-card__inline-panel {
+  background: var(--surface);
+}
+.product-card.is-expanded .product-card__inline-inner {
+  padding: 16px 18px 18px;
+}
+
+/* Степпер на полную ширину */
+.product-card.is-expanded .inline-stepper {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: 52px 1fr 52px;
+}
+.product-card.is-expanded .inline-stepper__btn {
+  height: 52px;
+  font-size: 24px;
+}
+.product-card.is-expanded .inline-stepper__input {
+  height: 52px;
+  font-size: 22px;
+  min-width: 0;     /* важно — иначе grid не даст input ужаться */
+}
+
+/* Кнопки действий: на узких экранах в столбик, на широких в строку */
+.product-card.is-expanded .inline-actions {
+  grid-template-columns: 1fr 1.4fr;
+}
+
+/* Комментарий — нормальный размер */
+.product-card.is-expanded .inline-field__textarea {
+  min-height: 60px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* На планшете и ПК — раскрытая карточка горизонтальная: фото слева, поля справа */
+@media (min-width: 720px) {
+  .product-card.is-expanded {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto;
+  }
+  .product-card.is-expanded .product-card__image-wrap {
+    aspect-ratio: 1 / 1;
+    grid-row: 1 / span 2;
+  }
+  .product-card.is-expanded .product-card__body {
+    padding: 18px 20px 12px;
+  }
+  .product-card.is-expanded .product-card__inline-panel {
+    grid-column: 2;
+    border-top: 1px solid var(--border-light);
+  }
+}
+
+@media (min-width: 992px) {
+  .product-card.is-expanded {
+    grid-template-columns: 320px 1fr;
+  }
+  .product-card.is-expanded .product-card__inline-inner {
+    padding: 18px 22px 20px;
+  }
+  /* Ещё шире — поля и комментарий рядом */
+  .product-card.is-expanded .inline-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+}
