@@ -146,7 +146,7 @@
         <!-- Сюда можно вставить свой логотип, например:
              <img class="header__logo-img" src="/path/to/logo.png" alt="Логотип" />
              Также есть возможность поменять текст в .header__title, либо удалить span целиком. -->
-        <img class="header__logo-img" id="headerLogoImg" src="" alt="" style="display:none;" />
+        <img class="header__logo-img" id="headerLogoImg" src="Моне.png" alt="" style="display:none;" />
         <span class="header__title" id="headerTitle"></span>
       </div>
 
@@ -835,15 +835,13 @@
       <!-- Поле остатка -->
       <div class="branches-qty-section">
         <h3 class="branches-qty-title">📦 Введите фактический остаток (шт)</h3>
-        <div class="branches-qty-grid">
-          <div class="branch-qty-item">
-            <div class="qty-stepper qty-stepper--big">
-              <button class="qty-btn" data-action="minus" data-target="proofQty">−</button>
-              <input type="number" id="proofQty" class="qty-input qty-input--big" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="proofQty">+</button>
-            </div>
-            <div class="branch-qty-target-hint" id="proofQtyHint"></div>
+        <div class="proof-qty-wrap">
+          <div class="qty-stepper qty-stepper--big">
+            <button class="qty-btn" data-action="minus" data-target="proofQty">−</button>
+            <input type="number" id="proofQty" class="qty-input qty-input--big" value="0" min="0" inputmode="numeric"/>
+            <button class="qty-btn" data-action="plus" data-target="proofQty">+</button>
           </div>
+          <div class="branch-qty-target-hint" id="proofQtyHint"></div>
         </div>
       </div>
 
