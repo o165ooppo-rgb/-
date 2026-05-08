@@ -1288,12 +1288,21 @@ function renderAll() {
       // Игнорируем клики на интерактивных элементах внутри карточки
       if (e.target.closest('.product-card__camera-btn')) return;
       if (e.target.closest('.product-card__inline-panel')) return;
+      if (e.target.closest('.product-card__close-expanded')) return;
       const id = card.dataset.id;
       if (isManager()) {
         openEditModal(id);
       } else {
         toggleInlinePanel(id);
       }
+    });
+  });
+
+  // Крестик закрытия раскрытой карточки
+  $('productsGrid').querySelectorAll('.product-card__close-expanded').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      closeInlinePanel(btn.dataset.closeId);
     });
   });
 
@@ -1470,8 +1479,20 @@ function buildCard(product, index) {
       </div>`;
   }
 
+  // Крестик закрытия (виден только когда карточка раскрыта)
+  let closeBtnHtml = '';
+  if (isStaff()) {
+    closeBtnHtml = `
+      <button class="product-card__close-expanded" data-close-id="${product.id}" aria-label="Свернуть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>`;
+  }
+
   return `
     <div class="product-card" data-id="${product.id}" style="animation-delay:${delay}ms">
+      ${closeBtnHtml}
       <div class="product-card__image-wrap">
         ${imageHtml}
         ${cameraBtnHtml}
