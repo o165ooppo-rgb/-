@@ -3629,74 +3629,333 @@ body.role-staff .drawer-item--branch { display: none !important; }
 }
 
 /* ============================================================
-   ===== ФИКС: степпер в proof-модалке =====
+   ===== ИКОНКА КАМЕРЫ НА КАРТОЧКЕ (вместо бейджа) =====
 ============================================================ */
-.proof-qty-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-}
-.proof-qty-wrap .qty-stepper--big {
-  display: grid !important;
-  grid-template-columns: 56px 1fr 56px;
-  align-items: stretch;
-  width: 100%;
-  max-width: 320px;
-  gap: 0;
-  background: var(--surface);
-  border-radius: var(--radius);
-  overflow: hidden;
-  border: 1.5px solid var(--border);
-}
-.proof-qty-wrap .qty-stepper--big .qty-btn {
-  width: 56px !important;
-  height: 56px !important;
-  font-size: 26px !important;
-  border: none !important;
-  background: var(--surface2) !important;
-  color: var(--text-primary) !important;
+.product-card__camera-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  display: grid !important;
-  place-items: center !important;
-  font-weight: 600 !important;
-  border-radius: 0 !important;
+  z-index: 5;
+  transition: transform var(--t-fast), background var(--t-fast);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
-.proof-qty-wrap .qty-stepper--big .qty-btn:hover {
-  background: var(--accent-light) !important;
+.product-card__camera-btn:hover {
+  background: var(--accent);
+  transform: scale(1.08);
 }
-.proof-qty-wrap .qty-stepper--big .qty-btn:active {
-  background: var(--accent) !important;
-  color: #fff !important;
+.product-card__camera-btn:active {
+  transform: scale(0.95);
 }
-.proof-qty-wrap .qty-stepper--big .qty-input--big {
-  width: 100% !important;
-  height: 56px !important;
-  border: none !important;
-  border-left: 1.5px solid var(--border) !important;
-  border-right: 1.5px solid var(--border) !important;
-  border-radius: 0 !important;
-  font-size: 28px !important;
-  font-weight: 800 !important;
-  text-align: center !important;
-  background: #fff !important;
-  outline: none !important;
-  -moz-appearance: textfield;
+.product-card__camera-btn svg {
+  width: 18px;
+  height: 18px;
 }
-.proof-qty-wrap .qty-stepper--big .qty-input--big::-webkit-outer-spin-button,
-.proof-qty-wrap .qty-stepper--big .qty-input--big::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+
+/* Когда фото для отчёта уже выбрано — кнопка зелёная с галочкой */
+.product-card.has-photo .product-card__camera-btn {
+  background: var(--success);
 }
-.proof-qty-wrap .branch-qty-target-hint {
-  margin-top: 4px;
-  text-align: center;
+.product-card.has-photo .product-card__camera-btn::after {
+  content: '✓';
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--success);
 }
 
 /* ============================================================
-   ===== ДЕСКТОПНАЯ ВЕРСИЯ (≥ 992px) =====
-   Постоянный сайдбар слева, шапка и контент справа.
+   ===== INLINE-ПАНЕЛЬ (аккордеон под карточкой) =====
+============================================================ */
+.product-card__inline-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(180deg, var(--accent-subtle) 0%, var(--accent-light) 100%);
+  border-top: 0 solid transparent;
+}
+.product-card__inline-panel > .product-card__inline-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+.product-card.is-expanded .product-card__inline-panel {
+  grid-template-rows: 1fr;
+  border-top: 1px solid var(--border);
+}
+.product-card__inline-inner {
+  padding: 0;
+}
+.product-card.is-expanded .product-card__inline-inner {
+  padding: 14px;
+  animation: inlineFadeIn 0.4s 0.1s ease backwards;
+}
+
+@keyframes inlineFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.inline-field {
+  margin-bottom: 12px;
+}
+.inline-field__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.inline-stepper {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.inline-stepper__btn {
+  border: none;
+  background: var(--surface2);
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: 600;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background var(--t-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.inline-stepper__btn:hover { background: var(--accent-light); }
+.inline-stepper__btn:active { background: var(--accent); color: #fff; }
+.inline-stepper__input {
+  border: none;
+  border-left: 1.5px solid var(--border);
+  border-right: 1.5px solid var(--border);
+  text-align: center;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  background: #fff;
+  outline: none;
+  -moz-appearance: textfield;
+}
+.inline-stepper__input::-webkit-outer-spin-button,
+.inline-stepper__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.inline-field__hint {
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  min-height: 14px;
+  color: var(--text-muted);
+}
+.inline-field__hint.hint-low { color: var(--danger); }
+.inline-field__hint.hint-ok  { color: var(--success); }
+
+.inline-field__textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: var(--font);
+  background: #fff;
+  resize: vertical;
+  min-height: 50px;
+  outline: none;
+  color: var(--text-primary);
+}
+.inline-field__textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(24, 119, 242, 0.12);
+}
+
+.inline-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 8px;
+  margin-top: 4px;
+}
+.inline-btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font);
+  transition: transform var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+}
+.inline-btn--cancel {
+  background: var(--surface2);
+  color: var(--text-secondary);
+}
+.inline-btn--cancel:hover { background: var(--border); }
+.inline-btn--save {
+  background: linear-gradient(135deg, #1877F2 0%, #1464d8 100%);
+  color: #fff;
+}
+.inline-btn--save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(24, 119, 242, 0.3);
+}
+.inline-btn--save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.inline-btn--save svg { width: 14px; height: 14px; }
+
+/* Скрываем старый бейдж статуса для сотрудника (он не нужен) */
+.role-staff .product-card__badge { display: none !important; }
+
+/* ============================================================
+   ===== PHOTO CHOICE BOTTOM-SHEET (Telegram-like) =====
+============================================================ */
+.photo-choice-sheet {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 8000;
+  display: none;
+  align-items: flex-end;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.photo-choice-sheet.active {
+  display: flex;
+  animation: photoChoiceFadeIn 0.2s ease;
+}
+@keyframes photoChoiceFadeIn {
+  from { background: rgba(0,0,0,0); }
+  to   { background: rgba(0,0,0,0.5); }
+}
+.photo-choice-sheet__panel {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+  animation: photoChoiceSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes photoChoiceSlideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.photo-choice-sheet__handle {
+  width: 40px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 6px auto 14px;
+}
+.photo-choice-sheet__title {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-primary);
+  margin-bottom: 14px;
+}
+.photo-choice-sheet__btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: none;
+  background: var(--surface2);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font);
+  transition: background var(--t-fast), transform var(--t-fast);
+}
+.photo-choice-sheet__btn:hover { background: var(--accent-light); }
+.photo-choice-sheet__btn:active { transform: scale(0.98); }
+.photo-choice-sheet__icon {
+  font-size: 28px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+.photo-choice-sheet__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.photo-choice-sheet__label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.photo-choice-sheet__sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.photo-choice-sheet__cancel {
+  width: 100%;
+  padding: 13px;
+  margin-top: 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+}
+.photo-choice-sheet__cancel:hover { background: var(--surface2); }
+
+/* На десктопе — показываем как обычный модал по центру */
+@media (min-width: 992px) {
+  .photo-choice-sheet { align-items: center; }
+  .photo-choice-sheet__panel {
+    border-radius: var(--radius-lg);
+    max-width: 420px;
+    margin: 20px;
+    padding: 14px 18px 18px;
+  }
+  .photo-choice-sheet__handle { display: none; }
+}
+
+/* ============================================================
+   ===== ДЕСКТОПНАЯ ВЕРСИЯ (≥ 992px) — постоянный сайдбар =====
 ============================================================ */
 @media (min-width: 992px) {
   :root {
@@ -3708,7 +3967,7 @@ body.role-staff .drawer-item--branch { display: none !important; }
     padding-left: var(--sidebar-w);
   }
 
-  /* Сайдбар (drawer) фиксируем — он всегда видим */
+  /* Сайдбар фиксируем — он всегда видим */
   .drawer-overlay {
     position: fixed;
     inset: 0 auto 0 0;
@@ -3733,17 +3992,14 @@ body.role-staff .drawer-item--branch { display: none !important; }
     display: flex !important;
   }
 
-  /* Кнопку «закрыть» в сайдбаре скрываем */
+  /* Кнопку «закрыть» в сайдбаре скрываем (некуда закрывать) */
   .drawer-close { display: none !important; }
 
   /* Бургер тоже не нужен */
   .btn-burger { display: none !important; }
 
-  /* Шапка занимает оставшуюся часть */
-  .header {
-    position: sticky;
-    top: 0;
-  }
+  /* Шапка sticky сверху */
+  .header { position: sticky; top: 0; }
   .header__inner {
     max-width: none;
     padding: 0 28px;
@@ -3760,19 +4016,19 @@ body.role-staff .drawer-item--branch { display: none !important; }
   }
   .main { padding: 24px 28px 60px; }
 
-  /* Сетка товаров */
+  /* Сетка товаров — больше колонок */
   .products-grid {
     grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
     gap: 18px;
   }
 
-  /* Галерея */
+  /* Галерея покрупнее */
   .gallery-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 16px;
   }
 
-  /* Сводка отчётов */
+  /* Сводка отчётов в ряд */
   .reports-summary {
     grid-template-columns: repeat(4, 1fr);
   }
@@ -3786,16 +4042,14 @@ body.role-staff .drawer-item--branch { display: none !important; }
 
   .drawer-profile { padding: 20px 18px 18px; }
 
-  /* Печать-область */
+  /* Печать — без сайдбара */
   @media print {
     body { padding-left: 0 !important; }
     .drawer, .drawer-overlay { display: none !important; }
   }
 }
 
-/* ============================================================
-   ===== БОЛЬШИЕ ЭКРАНЫ (≥ 1400px) =====
-============================================================ */
+/* Большие экраны (≥ 1400px) */
 @media (min-width: 1400px) {
   .main,
   .page-header,
