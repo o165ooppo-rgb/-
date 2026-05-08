@@ -3627,3 +3627,187 @@ body.role-staff .drawer-item--branch { display: none !important; }
     text-align: center;
   }
 }
+
+/* ============================================================
+   ===== ФИКС: степпер в proof-модалке =====
+============================================================ */
+.proof-qty-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.proof-qty-wrap .qty-stepper--big {
+  display: grid !important;
+  grid-template-columns: 56px 1fr 56px;
+  align-items: stretch;
+  width: 100%;
+  max-width: 320px;
+  gap: 0;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1.5px solid var(--border);
+}
+.proof-qty-wrap .qty-stepper--big .qty-btn {
+  width: 56px !important;
+  height: 56px !important;
+  font-size: 26px !important;
+  border: none !important;
+  background: var(--surface2) !important;
+  color: var(--text-primary) !important;
+  cursor: pointer;
+  display: grid !important;
+  place-items: center !important;
+  font-weight: 600 !important;
+  border-radius: 0 !important;
+}
+.proof-qty-wrap .qty-stepper--big .qty-btn:hover {
+  background: var(--accent-light) !important;
+}
+.proof-qty-wrap .qty-stepper--big .qty-btn:active {
+  background: var(--accent) !important;
+  color: #fff !important;
+}
+.proof-qty-wrap .qty-stepper--big .qty-input--big {
+  width: 100% !important;
+  height: 56px !important;
+  border: none !important;
+  border-left: 1.5px solid var(--border) !important;
+  border-right: 1.5px solid var(--border) !important;
+  border-radius: 0 !important;
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+  background: #fff !important;
+  outline: none !important;
+  -moz-appearance: textfield;
+}
+.proof-qty-wrap .qty-stepper--big .qty-input--big::-webkit-outer-spin-button,
+.proof-qty-wrap .qty-stepper--big .qty-input--big::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.proof-qty-wrap .branch-qty-target-hint {
+  margin-top: 4px;
+  text-align: center;
+}
+
+/* ============================================================
+   ===== ДЕСКТОПНАЯ ВЕРСИЯ (≥ 992px) =====
+   Постоянный сайдбар слева, шапка и контент справа.
+============================================================ */
+@media (min-width: 992px) {
+  :root {
+    --sidebar-w: 280px;
+  }
+
+  /* Освобождаем место под фиксированный сайдбар */
+  body {
+    padding-left: var(--sidebar-w);
+  }
+
+  /* Сайдбар (drawer) фиксируем — он всегда видим */
+  .drawer-overlay {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-w);
+    background: transparent !important;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .drawer-overlay.active { background: transparent !important; }
+
+  .drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    max-width: var(--sidebar-w);
+    transform: none !important;
+    box-shadow: 1px 0 0 var(--border), 2px 0 12px rgba(0, 0, 0, 0.04);
+    pointer-events: auto;
+    z-index: 50;
+    display: flex !important;
+  }
+
+  /* Кнопку «закрыть» в сайдбаре скрываем */
+  .drawer-close { display: none !important; }
+
+  /* Бургер тоже не нужен */
+  .btn-burger { display: none !important; }
+
+  /* Шапка занимает оставшуюся часть */
+  .header {
+    position: sticky;
+    top: 0;
+  }
+  .header__inner {
+    max-width: none;
+    padding: 0 28px;
+    height: var(--header-h);
+  }
+
+  /* Контент во всю ширину справа от сайдбара */
+  .main,
+  .page-header,
+  .toolbar__row {
+    max-width: 1320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .main { padding: 24px 28px 60px; }
+
+  /* Сетка товаров */
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+    gap: 18px;
+  }
+
+  /* Галерея */
+  .gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
+
+  /* Сводка отчётов */
+  .reports-summary {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .product-card__image-wrap { aspect-ratio: 1 / 1; }
+
+  .branch-indicator {
+    margin: 12px auto 0;
+    max-width: 1320px;
+  }
+
+  .drawer-profile { padding: 20px 18px 18px; }
+
+  /* Печать-область */
+  @media print {
+    body { padding-left: 0 !important; }
+    .drawer, .drawer-overlay { display: none !important; }
+  }
+}
+
+/* ============================================================
+   ===== БОЛЬШИЕ ЭКРАНЫ (≥ 1400px) =====
+============================================================ */
+@media (min-width: 1400px) {
+  .main,
+  .page-header,
+  .toolbar__row,
+  .branch-indicator {
+    max-width: 1480px;
+  }
+  .products-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)) !important;
+    gap: 20px;
+  }
+  .header__inner {
+    padding: 0 36px;
+  }
+}
