@@ -532,15 +532,22 @@ function initAuth() {
     if (e.key === 'Enter') $('loginPassword').focus();
   });
 
+  // Время показа сплеша: 2.2s (анимация в CSS). Ждём, пока он исчезнет.
+  const SPLASH_DURATION = 2200;
+
   const session = loadSession();
   if (session && session.id) {
+    // У пользователя есть аккаунт — после сплеша сразу открываем склад
     state.currentUser = session;
-    enterApp(true);
+    setTimeout(() => enterApp(true), SPLASH_DURATION);
     return;
   }
 
-  $('authOverlay').style.display = 'flex';
-  setTimeout(() => $('loginUsername').focus(), 200);
+  // Нет сессии — после сплеша показываем форму логина
+  setTimeout(() => {
+    $('authOverlay').style.display = 'flex';
+    setTimeout(() => $('loginUsername').focus(), 200);
+  }, SPLASH_DURATION);
 
   bootstrapAccountsIfMissing().catch(() => {});
   bootstrapProductsIfMissing().catch(() => {});
@@ -2600,6 +2607,22 @@ function exportToExcel() {
    INIT
 =========================================================== */
 function init() {
+  // Сплеш-экран — показывается через CSS-анимацию (~2.2s + 0.5s fade).
+  // Скрываем его из DOM по событию animationend, чтобы он не блокировал клики.
+  const splash = $('splashScreen');
+  if (splash) {
+    // Анимация исчезновения = последняя на splash-screen, поэтому ловим её
+    splash.addEventListener('animationend', e => {
+      if (e.animationName === 'splashFadeOut') {
+        splash.classList.add('hidden');
+      }
+    });
+    // Защита: если по какой-то причине animationend не сработал — убираем через 3.5s
+    setTimeout(() => splash.classList.add('hidden'), 3500);
+  }
+
+  // Запускаем основную инициализацию параллельно (Firebase, авторизация),
+  // чтобы пока сплеш анимируется — данные уже подгрузились.
   initAuth();
 }
 
