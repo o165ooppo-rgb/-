@@ -4292,3 +4292,94 @@ body.role-staff .drawer-item--branch { display: none !important; }
     padding: 18px 24px 20px;
   }
 }
+
+/* ============================================================
+   ===== STEPPER НА КАРТОЧКЕ (мгновенное сохранение) =====
+   Кнопка − [число] + внизу карточки. Тап → запись в БД.
+============================================================ */
+
+/* Скрываем категорию-чип на карточке (по требованию пользователя) */
+.product-card__cat-badge { display: none !important; }
+
+/* Контейнер степпера прижат к низу карточки, во всю её ширину */
+.product-card__stepper {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1.2fr) 1fr;
+  align-items: stretch;
+  height: 48px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
+  margin-top: auto;     /* прижимаем степпер к низу карточки */
+}
+
+.product-card__stepper-btn {
+  border: none;
+  background: var(--surface2);
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--t-fast);
+  font-family: var(--font);
+}
+.product-card__stepper-btn:hover { background: var(--accent-light); }
+.product-card__stepper-btn:active {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(0.96);
+}
+
+.product-card__stepper-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-left: 1px solid var(--border-light);
+  border-right: 1px solid var(--border-light);
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  background: #fff;
+  color: var(--text-primary);
+  outline: none;
+  min-width: 0;          /* важно — иначе input в grid не ужмётся */
+  padding: 0 4px;
+  box-sizing: border-box;
+  font-family: var(--font);
+  -moz-appearance: textfield;
+}
+.product-card__stepper-input::-webkit-outer-spin-button,
+.product-card__stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.product-card__stepper-input:focus {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+/* Для менеджера степпер не нужен — у него карточка короче */
+.role-manager .product-card__stepper { display: none; }
+
+/* Раскладка карточки: содержимое + степпер у низа */
+.product-card {
+  display: flex;
+  flex-direction: column;
+}
+.product-card__body { flex: 1; }
+
+/* Иконка камеры подсвечена зелёным, когда фото прикреплено */
+.product-card.has-photo .product-card__camera-btn {
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.25);
+}
+
+/* === На широких экранах степпер чуть выше для удобства === */
+@media (min-width: 720px) {
+  .product-card__stepper { height: 52px; }
+  .product-card__stepper-input { font-size: 20px; }
+  .product-card__stepper-btn { font-size: 26px; }
+}
