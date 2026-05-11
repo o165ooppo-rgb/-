@@ -19,8 +19,36 @@
 </head>
 <body>
 
+  <!-- ===== SPLASH SCREEN (логотип-анимация при старте) ===== -->
+  <div class="splash-screen" id="splashScreen">
+    <div class="splash-logo">
+      <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" aria-label="Mone Café & Bakery">
+        <!-- Синяя мазка-кисть (левая) -->
+        <path class="splash-brush splash-brush--blue" d="M30,80 C70,60 110,75 150,72 C190,68 200,90 195,140 C198,180 192,220 175,250 C140,260 95,255 60,245 C45,210 28,170 30,130 Z"
+              fill="#5B3FA0"/>
+        <!-- Красная мазка-кисть (правая) -->
+        <path class="splash-brush splash-brush--red" d="M395,72 C430,68 470,75 510,80 C540,110 555,160 560,210 C540,245 500,260 460,255 C425,260 395,250 380,235 C375,200 380,150 388,110 C390,95 392,82 395,72 Z"
+              fill="#E73C4E"/>
+
+        <!-- Подпись Mone (рукописная) -->
+        <text class="splash-text splash-text--main" x="300" y="170" text-anchor="middle"
+              font-family="'Brush Script MT','Lucida Handwriting',cursive"
+              font-size="120" font-weight="700" fill="#1a1a2e" font-style="italic">Mone</text>
+        <!-- Тонкая черта над "one" -->
+        <line class="splash-underline" x1="260" y1="78" x2="380" y2="78"
+              stroke="#1a1a2e" stroke-width="2.5" stroke-linecap="round"/>
+
+        <!-- Подпись CAFÉ & BAKERY -->
+        <text class="splash-text splash-text--sub" x="300" y="225" text-anchor="middle"
+              font-family="Inter,Arial,sans-serif" font-size="26" font-weight="700"
+              letter-spacing="6" fill="#1a1a2e">CAFÉ &amp; BAKERY</text>
+      </svg>
+    </div>
+    <div class="splash-tagline" id="splashTagline">Складская система</div>
+  </div>
+
   <!-- ===== AUTH MODAL ===== -->
-  <div class="auth-overlay" id="authOverlay">
+  <div class="auth-overlay" id="authOverlay" style="display:none">
     <div class="auth-box" id="authBox">
       <div class="auth-logo">
         <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
