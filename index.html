@@ -2,1000 +2,326 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
-  <meta name="theme-color" content="#1877F2" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f2f2f7" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="format-detection" content="telephone=no" />
-  <meta name="description" content="Склад Mone — Управление остатками товаров по филиалам" />
-  <title>Склад Mone — Управление остатками</title>
+  <title>Mone Manager</title>
   <link rel="stylesheet" href="style.css" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <!-- SheetJS — экспорт отчётов в Excel (.xlsx) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&display=swap" rel="stylesheet" />
 </head>
 <body>
 
-  <!-- ===== SPLASH SCREEN (логотип-анимация при старте) ===== -->
-  <div class="splash-screen" id="splashScreen">
-    <div class="splash-logo">
-      <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" aria-label="Mone Café & Bakery">
-        <!-- Синяя мазка-кисть (левая) -->
-        <path class="splash-brush splash-brush--blue" d="M30,80 C70,60 110,75 150,72 C190,68 200,90 195,140 C198,180 192,220 175,250 C140,260 95,255 60,245 C45,210 28,170 30,130 Z"
-              fill="#5B3FA0"/>
-        <!-- Красная мазка-кисть (правая) -->
-        <path class="splash-brush splash-brush--red" d="M395,72 C430,68 470,75 510,80 C540,110 555,160 560,210 C540,245 500,260 460,255 C425,260 395,250 380,235 C375,200 380,150 388,110 C390,95 392,82 395,72 Z"
-              fill="#E73C4E"/>
+  <!-- PASSWORD LOCK SCREEN -->
+  <div class="lock-screen" id="lockScreen">
+    <div class="lock-card">
+      <div class="lock-icon">🔒</div>
+      <h1 class="lock-title">Mone Manager</h1>
+      <p class="lock-sub">Корпоративное управление расходами</p>
 
-        <!-- Подпись Mone (рукописная) -->
-        <text class="splash-text splash-text--main" x="300" y="170" text-anchor="middle"
-              font-family="'Brush Script MT','Lucida Handwriting',cursive"
-              font-size="120" font-weight="700" fill="#1a1a2e" font-style="italic">Mone</text>
-        <!-- Тонкая черта над "one" -->
-        <line class="splash-underline" x1="260" y1="78" x2="380" y2="78"
-              stroke="#1a1a2e" stroke-width="2.5" stroke-linecap="round"/>
-
-        <!-- Подпись CAFÉ & BAKERY -->
-        <text class="splash-text splash-text--sub" x="300" y="225" text-anchor="middle"
-              font-family="Inter,Arial,sans-serif" font-size="26" font-weight="700"
-              letter-spacing="6" fill="#1a1a2e">CAFÉ &amp; BAKERY</text>
-      </svg>
-    </div>
-    <div class="splash-tagline" id="splashTagline">Складская система</div>
-  </div>
-
-  <!-- ===== AUTH MODAL ===== -->
-  <div class="auth-overlay" id="authOverlay" style="display:none">
-    <div class="auth-box" id="authBox">
-      <div class="auth-logo">
-        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect width="36" height="36" rx="10" fill="#1877F2"/>
-          <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-        </svg>
-        <span>Склад Mone</span>
+      <!-- Role selector -->
+      <div class="role-tabs">
+        <button class="role-tab active" id="roleTabManager" data-role="manager">👔 Менеджер</button>
+        <button class="role-tab" id="roleTabEmployee" data-role="employee">👤 Сотрудник</button>
       </div>
 
-      <div class="auth-screen" id="authLogin">
-        <h2 class="auth-title">Вход в систему</h2>
-        <p class="auth-sub">Введите логин и пароль вашего аккаунта</p>
-        <div class="auth-field">
-          <label>Логин</label>
-          <input type="text" id="loginUsername" placeholder="Ваш логин" autocomplete="username"/>
-        </div>
-        <div class="auth-field">
-          <label>Пароль</label>
-          <div class="auth-input-wrap">
-            <input type="password" id="loginPassword" placeholder="Пароль" autocomplete="current-password"/>
-            <button class="auth-eye" id="loginEye" type="button" aria-label="Показать пароль">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-        </div>
-        <div class="auth-error" id="loginError"></div>
-        <button class="auth-btn auth-btn--primary" id="loginSubmitBtn">Войти</button>
-        <div class="auth-hint" id="authHint">
-          <strong>Подсказка:</strong> данные для входа выдаёт менеджер.
-        </div>
+      <div class="lock-input-wrap">
+        <input type="text" id="lockLogin" class="lock-input" placeholder="Логин" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" />
+        <input type="password" id="lockPassword" class="lock-input" placeholder="Пароль" autocomplete="current-password" />
+        <button class="lock-btn" id="lockBtn">Войти</button>
       </div>
+      <p class="lock-error" id="lockError"></p>
+      <p class="lock-hint" id="lockHint">Войдите, используя логин и пароль</p>
     </div>
   </div>
 
-  <!-- ===== MANAGER PANEL ===== -->
-  <div class="manager-overlay" id="managerOverlay" style="display:none">
-    <div class="manager-panel">
-      <div class="manager-panel__header">
-        <div class="manager-panel__title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Панель менеджера
+  <!-- APP -->
+  <div class="app" id="app" style="display:none;">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon-wrap">
+          <span class="logo-icon">◈</span>
         </div>
-        <button class="manager-panel__close" id="managerCloseBtn" aria-label="Закрыть">✕</button>
+        <span class="sidebar-logo-text">Mone</span>
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Закрыть меню">✕</button>
       </div>
 
-      <div class="manager-tabs">
-        <button class="manager-tab active" data-tab="users">👥 Аккаунты</button>
-        <button class="manager-tab" data-tab="logs">📋 Журнал</button>
-      </div>
-
-      <div class="manager-tab-content" id="tabUsers">
-        <div class="manager-users-header">
-          <span class="manager-section-label">Логины и пароли</span>
-        </div>
-        <p class="manager-hint">
-          Изменив логин или пароль филиала, вы автоматически закроете доступ старому сотруднику.
-        </p>
-        <div class="manager-users-list" id="managerUsersList"></div>
-      </div>
-
-      <div class="manager-tab-content" id="tabLogs" style="display:none">
-        <div class="manager-users-header">
-          <span class="manager-section-label">История действий</span>
-          <button class="manager-clear-logs-btn" id="clearLogsBtn">Очистить</button>
-        </div>
-        <div class="manager-logs-list" id="managerLogsList"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== MANAGER EDIT USER MODAL ===== -->
-  <div class="modal-overlay" id="userEditModal">
-    <div class="modal modal--password">
-      <button class="modal__close" id="userEditClose" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-      <h2 style="margin-bottom:6px;font-size:18px;font-weight:800;" id="userEditTitle">Изменить аккаунт</h2>
-      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px" id="userEditSubtitle">Заполните то, что хотите поменять</p>
-
-      <div class="auth-field" style="text-align:left">
-        <label>Отображаемое имя</label>
-        <input type="text" id="ueName" placeholder="Имя пользователя" class="auth-standalone-input"/>
-      </div>
-      <div class="auth-field" style="text-align:left;margin-top:10px">
-        <label>Логин</label>
-        <input type="text" id="ueUsername" placeholder="Логин для входа" class="auth-standalone-input" autocapitalize="none"/>
-      </div>
-      <div class="auth-field" style="text-align:left;margin-top:10px">
-        <label>Новый пароль <span style="font-weight:400;color:var(--text-muted)">(оставьте пустым, чтобы не менять)</span></label>
-        <div class="auth-input-wrap">
-          <input type="password" id="uePassword" placeholder="Новый пароль" class="auth-standalone-input"/>
-          <button class="auth-eye" id="ueEye" type="button" aria-label="Показать пароль" style="right:9px">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="auth-error" id="ueError" style="margin-top:8px"></div>
-      <div class="ue-actions">
-        <button class="btn-delete-inline" id="ueDeleteBtn" style="display:none;margin-top:0">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-            <path d="M10 11v6"/><path d="M14 11v6"/>
-          </svg>
-          Удалить аккаунт
-        </button>
-        <button class="btn-save btn-save--full" id="ueSubmitBtn" style="margin-top:0">Сохранить</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== HEADER ===== -->
-  <header class="header" id="mainHeader" style="display:none">
-    <div class="header__inner">
-      <button class="btn-burger" id="burgerBtn" aria-label="Меню">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-
-      <div class="header__brand" id="headerBrand">
-        <!-- Сюда можно вставить свой логотип, например:
-             <img class="header__logo-img" src="/path/to/logo.png" alt="Логотип" />
-             Также есть возможность поменять текст в .header__title, либо удалить span целиком. -->
-        <img class="header__logo-img" id="headerLogoImg" src="Моне.png" alt="" style="display:none;" />
-        <span class="header__title" id="headerTitle"></span>
-      </div>
-
-      <!-- Филиалы (только для менеджера) -->
-      <nav class="branches" id="branches">
-        <button class="branch-btn active" data-branch="all">Все филиалы</button>
-        <button class="branch-btn" data-branch="branch1">Сибирский</button>
-        <button class="branch-btn" data-branch="branch2">Фреско</button>
-        <button class="branch-btn" data-branch="branch3">Гелион</button>
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-label">Категории</div>
+        <div id="sidebarCategoryList"></div>
       </nav>
 
-      <div class="header__actions">
-        <span class="sync-indicator sync--connecting" id="syncIndicator">⏳ Подключение...</span>
-
-        <button class="btn-manager" id="managerPanelBtn" style="display:none" title="Панель менеджера">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          <span>Менеджер</span>
+      <!-- Manager-only: management tools -->
+      <div class="sidebar-section manager-only" id="sidebarManagerSection">
+        <div class="sidebar-section-label">Управление</div>
+        <button class="sidebar-nav-item" data-action="manage-categories">
+          <span class="snav-icon">🗂</span>
+          <span class="snav-label">Категории</span>
         </button>
-
-        <div class="user-chip" id="userChip">
-          <div class="user-chip__avatar" id="userAvatar">?</div>
-          <span class="user-chip__name" id="userChipName"></span>
-          <div class="user-dropdown" id="userDropdown">
-            <div class="user-dropdown__info">
-              <strong id="dropdownName"></strong>
-              <span id="dropdownRole"></span>
-            </div>
-            <div class="user-dropdown__divider"></div>
-            <button class="user-dropdown__item" id="logoutBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              Выйти
-            </button>
-          </div>
-        </div>
-
-        <button class="btn-icon" id="printBtn" title="Печать отчёта">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="6 9 6 2 18 2 18 9"/>
-            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
-            <rect x="6" y="14" width="12" height="8"/>
-          </svg>
-          <span>Печать</span>
+        <button class="sidebar-nav-item" data-action="manage-users">
+          <span class="snav-icon">👥</span>
+          <span class="snav-label">Сотрудники</span>
         </button>
-
-        <button class="btn-add" id="addProductBtn" style="display:none">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          <span>Добавить товар</span>
+        <button class="sidebar-nav-item" data-action="manage-credentials">
+          <span class="snav-icon">🔑</span>
+          <span class="snav-label">Логин и пароль</span>
         </button>
       </div>
-    </div>
 
-    <button class="branch-indicator" id="branchIndicator">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
-        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-        <circle cx="12" cy="10" r="3"/>
-      </svg>
-      <span class="branch-indicator__label">Филиал:</span>
-      <span class="branch-indicator__value" id="branchIndicatorValue">Все филиалы</span>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="branch-indicator__chevron">
-        <polyline points="6 9 12 15 18 9"/>
-      </svg>
+      <div class="sidebar-bottom">
+        <div class="sidebar-user-card" id="sidebarUserCard">
+          <div class="suc-avatar" id="sucAvatar">M</div>
+          <div class="suc-info">
+            <div class="suc-name" id="sucName">Менеджер</div>
+            <div class="suc-role" id="sucRole">Администратор</div>
+          </div>
+        </div>
+        <button class="sidebar-export-btn" id="btnExportXls" title="Экспорт в Excel">
+          <span>📊</span><span>Отчёт Excel</span>
+        </button>
+        <button class="sidebar-logout-btn" id="btnLogout">
+          <span>⎋</span><span>Выйти</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- SIDEBAR TOGGLE (mobile/tablet) -->
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Открыть меню" aria-expanded="false">
+      <span class="hamburger"><span></span><span></span><span></span></span>
     </button>
-  </header>
 
-  <!-- ===== DRAWER (мобильное меню) ===== -->
-  <div class="drawer-overlay" id="drawerOverlay">
-    <div class="drawer" id="drawer">
-      <div class="drawer-profile">
-        <div class="drawer-profile__avatar" id="drawerAvatar">?</div>
-        <div class="drawer-profile__info">
-          <div class="drawer-profile__name" id="drawerName">—</div>
-          <div class="drawer-profile__role" id="drawerRole">—</div>
+    <!-- MAIN CONTENT AREA -->
+    <div class="content-area" id="contentArea">
+
+      <!-- HEADER -->
+      <header class="header">
+        <div class="header-inner">
+          <div class="header-left">
+            <div class="header-date" id="headerDate"></div>
+            <div class="header-role-badge" id="headerRoleBadge"></div>
+          </div>
+
+          <div class="header-pills">
+            <div class="pill pill-neutral"><span id="countTotal">0</span> всего</div>
+            <div class="pill pill-warn" id="pillWarn" style="display:none"><span id="countWarning">0</span> ⚠ скоро</div>
+            <div class="pill pill-danger" id="pillDanger" style="display:none"><span id="countDanger">0</span> 🔴 срочно</div>
+          </div>
         </div>
-        <button class="drawer-close" id="drawerCloseBtn" aria-label="Закрыть">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
+      </header>
+
+      <!-- ALERT BANNER -->
+      <div class="alert-banner" id="alertBanner" style="display:none;">
+        <span>🔴</span>
+        <span id="alertText"></span>
       </div>
 
-      <div class="drawer-sync" id="drawerSync">
-        <span id="drawerSyncDot" class="drawer-sync__dot"></span>
-        <span id="drawerSyncText">Подключение...</span>
+      <!-- PAYMENT TYPE TABS -->
+      <div class="pay-type-tabs">
+        <button class="pay-tab active" id="tabCash" data-type="cash">💵 Наличные</button>
+        <button class="pay-tab" id="tabTransfer" data-type="transfer">🏦 Перечисление</button>
       </div>
 
-      <div class="drawer-section">
-        <div class="drawer-section__title">Навигация</div>
+      <!-- MAIN — DYNAMIC COLUMNS -->
+      <main class="main">
+        <div class="columns-layout" id="columnsLayout">
+          <!-- columns rendered dynamically -->
+        </div>
+      </main>
 
-        <button class="drawer-item drawer-nav-item active" data-page="products">
-          <span class="drawer-item__icon">📦</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Товары</span>
-          </span>
-        </button>
-
-        <button class="drawer-item drawer-nav-item" data-page="gallery">
-          <span class="drawer-item__icon">🖼️</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Галерея</span>
-            <span class="drawer-item__sub">Фото товаров</span>
-          </span>
-        </button>
-
-        <button class="drawer-item drawer-nav-item" data-page="reports" id="drawerReportsBtn" style="display:none">
-          <span class="drawer-item__icon">📊</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Отчёты</span>
-            <span class="drawer-item__sub">Только менеджер</span>
-          </span>
-        </button>
+      <!-- FAB (manager only) -->
+      <div class="fab-wrap manager-only" id="fabWrap">
+        <div class="fab-menu" id="fabMenu">
+          <!-- fab items rendered dynamically -->
+        </div>
+        <button class="fab" id="fabAdd" aria-label="Добавить">+</button>
       </div>
 
-      <div class="drawer-section">
-        <div class="drawer-section__title">Действия</div>
+    </div><!-- /content-area -->
+  </div><!-- /app -->
 
-        <button class="drawer-item" id="drawerBranchBtn" style="display:none">
-          <span class="drawer-item__icon">📍</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Филиал</span>
-            <span class="drawer-item__sub" id="drawerBranchSub">Все филиалы</span>
-          </span>
-          <svg class="drawer-item__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
-        </button>
 
-        <button class="drawer-item" id="drawerAddBtn" style="display:none">
-          <span class="drawer-item__icon">➕</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Добавить товар</span>
-          </span>
-        </button>
-
-        <button class="drawer-item" id="drawerPrintBtn">
-          <span class="drawer-item__icon">🖨️</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Печать отчёта</span>
-          </span>
-        </button>
-
-        <button class="drawer-item" id="drawerExcelBtn" style="display:none">
-          <span class="drawer-item__icon">📗</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Скачать Excel</span>
-            <span class="drawer-item__sub">.xlsx файл</span>
-          </span>
-        </button>
-
-        <button class="drawer-item" id="drawerManagerBtn" style="display:none">
-          <span class="drawer-item__icon">👥</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Панель менеджера</span>
-          </span>
-        </button>
+  <!-- ═══ VIEW MODAL ═══ -->
+  <div class="overlay" id="viewOverlay">
+    <div class="sheet" id="viewSheet">
+      <div class="sheet-handle"></div>
+      <div class="view-header">
+        <div class="view-cat-badge" id="vCatBadge"></div>
+        <div class="view-status-badge" id="vStatusBadge"></div>
+        <div class="view-number" id="vNumber"></div>
+        <div class="view-meta" id="vMeta"></div>
+        <div class="view-actions">
+          <button class="action-btn action-edit manager-only" id="vBtnEdit" aria-label="Изменить">✏️</button>
+          <button class="action-btn action-delete manager-only" id="vBtnDelete" aria-label="Удалить">🗑</button>
+          <button class="action-btn action-close" id="vBtnClose" aria-label="Закрыть">✕</button>
+        </div>
       </div>
-
-      <div class="drawer-footer">
-        <button class="drawer-item drawer-item--danger" id="drawerLogoutBtn">
-          <span class="drawer-item__icon">🚪</span>
-          <span class="drawer-item__text">
-            <span class="drawer-item__label">Выйти из аккаунта</span>
-          </span>
-        </button>
+      <div class="view-countdown" id="vCountdown"></div>
+      <div class="view-fields" id="vFields"></div>
+      <div class="view-progress-section">
+        <div class="progress-labels">
+          <span>Цикл оплаты</span>
+          <span id="vProgressPct"></span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="vProgressFill"></div>
+        </div>
+      </div>
+      <div class="view-footer manager-only">
+        <button class="btn-paid" id="btnMarkPaid">✓ Отметить оплаченным</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== МОДАЛКА ВЫБОРА ФИЛИАЛА (только для менеджера) ===== -->
-  <div class="modal-overlay" id="branchModal">
-    <div class="modal modal--branch">
-      <button class="modal__close" id="branchModalClose">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-      <h2 class="branch-modal__title">Выберите филиал</h2>
-      <p class="branch-modal__sub">Покажем остатки только этого филиала</p>
-      <div class="branch-modal__list" id="branchModalList">
-        <button class="branch-option active" data-branch="all">
-          <div class="branch-option__icon">🏢</div>
-          <div class="branch-option__content">
-            <div class="branch-option__name">Все филиалы</div>
-            <div class="branch-option__desc" id="branchStatAll">— товаров</div>
-          </div>
-          <div class="branch-option__check">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-        </button>
-        <button class="branch-option" data-branch="branch1">
-          <div class="branch-option__icon">🏪</div>
-          <div class="branch-option__content">
-            <div class="branch-option__name">Сибирский</div>
-            <div class="branch-option__desc" id="branchStat1">— товаров</div>
-          </div>
-          <div class="branch-option__check">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-        </button>
-        <button class="branch-option" data-branch="branch2">
-          <div class="branch-option__icon">🏪</div>
-          <div class="branch-option__content">
-            <div class="branch-option__name">Фреско</div>
-            <div class="branch-option__desc" id="branchStat2">— товаров</div>
-          </div>
-          <div class="branch-option__check">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-        </button>
-        <button class="branch-option" data-branch="branch3">
-          <div class="branch-option__icon">🏪</div>
-          <div class="branch-option__content">
-            <div class="branch-option__name">Гелион</div>
-            <div class="branch-option__desc" id="branchStat3">— товаров</div>
-          </div>
-          <div class="branch-option__check">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-        </button>
+
+  <!-- ═══ EDIT / ADD MODAL ═══ -->
+  <div class="overlay" id="editOverlay">
+    <div class="sheet edit-sheet" id="editSheet">
+      <div class="sheet-handle"></div>
+      <div class="edit-title" id="editTitle">Добавить запись</div>
+      <div class="edit-cat-indicator" id="editCatIndicator"></div>
+      <div class="edit-form" id="dynamicEditForm"></div>
+      <div class="edit-footer">
+        <button class="btn-ghost" id="editCancel">Отмена</button>
+        <button class="btn-primary" id="editSave">Сохранить</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== TOOLBAR (только счётчик и фильтр, без поиска) ===== -->
-  <div class="toolbar" id="mainToolbar" style="display:none">
-    <div class="toolbar__inner">
-      <div class="toolbar__row">
-        <div class="stats-bar">
-          <span id="statsText">Товаров: 0</span>
-        </div>
 
-        <button class="btn-filter" id="filterBtn" aria-label="Открыть фильтр">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-          </svg>
-          <span>Фильтр</span>
-          <span class="btn-filter__badge" id="filterBadge" style="display:none">0</span>
-        </button>
+  <!-- ═══ DELETE CONFIRM MODAL ═══ -->
+  <div class="overlay" id="deleteOverlay">
+    <div class="sheet delete-sheet">
+      <div class="sheet-handle"></div>
+      <div class="delete-icon">🗑</div>
+      <div class="delete-title">Удалить запись?</div>
+      <div class="delete-sub" id="deleteSub"></div>
+      <div class="delete-footer">
+        <button class="btn-ghost" id="deleteCancel">Отмена</button>
+        <button class="btn-danger" id="deleteConfirm">Удалить</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== FILTER MODAL (без категории) ===== -->
-  <div class="modal-overlay" id="filterModal">
-    <div class="modal modal--filter">
-      <button class="modal__close" id="filterModalClose" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-      <h2 class="filter-modal__title">Фильтр и сортировка</h2>
-      <p class="filter-modal__sub" id="filterSubtitle">Сколько товаров осталось</p>
 
-      <!-- Остатки -->
-      <div class="filter-section">
-        <div class="filter-section__title">📦 Остатки</div>
-        <div class="filter-stocks" id="filterStocks">
-          <button class="filter-stock active" data-stock="all">
-            <span class="filter-stock__dot filter-stock__dot--all"></span>
-            <span class="filter-stock__label">Все товары</span>
-            <span class="filter-stock__count" id="filterCountAll">0</span>
-          </button>
-          <button class="filter-stock filter-stock--ok" data-stock="ok">
-            <span class="filter-stock__dot filter-stock__dot--ok"></span>
-            <span class="filter-stock__label">В наличии</span>
-            <span class="filter-stock__count" id="filterCountOk">0</span>
-          </button>
-          <button class="filter-stock filter-stock--low" data-stock="low">
-            <span class="filter-stock__dot filter-stock__dot--low"></span>
-            <span class="filter-stock__label">Мало запасов</span>
-            <span class="filter-stock__count" id="filterCountLow">0</span>
-          </button>
-          <button class="filter-stock filter-stock--out" data-stock="out">
-            <span class="filter-stock__dot filter-stock__dot--out"></span>
-            <span class="filter-stock__label">Нет в наличии</span>
-            <span class="filter-stock__count" id="filterCountOut">0</span>
-          </button>
-        </div>
+  <!-- ═══ MANAGE USERS MODAL ═══ -->
+  <div class="overlay" id="usersOverlay">
+    <div class="sheet users-sheet">
+      <div class="sheet-handle"></div>
+      <div class="users-header">
+        <div class="users-title">👥 Управление сотрудниками</div>
+        <button class="action-btn action-close" id="usersClose" aria-label="Закрыть">✕</button>
       </div>
-
-      <!-- Сводка -->
-      <div class="filter-section">
-        <div class="filter-section__title" id="filterSummaryTitle">📊 Сводка</div>
-        <div class="filter-summary" id="filterSummary"></div>
-      </div>
-
-      <!-- Сортировка -->
-      <div class="filter-section">
-        <div class="filter-section__title">↕ Сортировка</div>
-        <select id="filterSortSelect" class="filter-fullselect">
-          <option value="smart">Умная сортировка (мало → много)</option>
-          <option value="name">По названию (А → Я)</option>
-          <option value="qty-asc">Кол-во: меньше → больше</option>
-          <option value="qty-desc">Кол-во: больше → меньше</option>
-        </select>
-      </div>
-
-      <div class="filter-modal__footer">
-        <button class="btn-cancel" id="filterResetBtn">Сбросить</button>
-        <button class="btn-save" id="filterApplyBtn" style="background:var(--accent);color:#fff">Применить</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== PAGE: PRODUCTS ===== -->
-  <main class="main page page--products active" id="pageProducts" style="display:none">
-    <div class="products-grid" id="productsGrid"></div>
-    <div class="empty-state" id="emptyState" style="display:none;">
-      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="10" y="20" width="60" height="45" rx="6" stroke="#ccc" stroke-width="3"/>
-        <path d="M25 20V16a15 15 0 0130 0v4" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
-        <line x1="30" y1="42" x2="50" y2="42" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-      <p>Товары не найдены</p>
-      <span>Попробуйте изменить фильтры</span>
-    </div>
-  </main>
-
-  <!-- ===== PAGE: GALLERY ===== -->
-  <main class="main page page--gallery" id="pageGallery" style="display:none">
-    <div class="page-header">
-      <div class="page-header__icon">🖼️</div>
-      <div class="page-header__text">
-        <h2 class="page-header__title">Галерея фото товаров</h2>
-        <p class="page-header__sub" id="galleryPageSub">Все фотографии товаров</p>
-      </div>
-    </div>
-
-    <div class="reports-filters" id="galleryFilters" style="display:none">
-      <button class="reports-filter-btn active" data-gfilter="all">🏢 Все филиалы</button>
-      <button class="reports-filter-btn" data-gfilter="branch1">🏪 Сибирский</button>
-      <button class="reports-filter-btn" data-gfilter="branch2">🏪 Фреско</button>
-      <button class="reports-filter-btn" data-gfilter="branch3">🏪 Гелион</button>
-    </div>
-
-    <div class="gallery-grid" id="galleryGrid"></div>
-
-    <div class="empty-state" id="galleryEmpty" style="display:none">
-      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="10" y="14" width="60" height="50" rx="6" stroke="#ccc" stroke-width="3"/>
-        <circle cx="28" cy="32" r="5" stroke="#ccc" stroke-width="3"/>
-        <path d="M14 60l18-18 14 14 8-8 12 12" stroke="#ccc" stroke-width="3" stroke-linejoin="round"/>
-      </svg>
-      <p>Пока нет фотографий</p>
-      <span>Загрузите фото товара — оно появится здесь</span>
-    </div>
-  </main>
-
-  <!-- ===== PAGE: REPORTS (только менеджер) ===== -->
-  <main class="main page page--reports" id="pageReports" style="display:none">
-    <div class="page-header">
-      <div class="page-header__icon">📊</div>
-      <div class="page-header__text">
-        <h2 class="page-header__title">Отчёты по филиалам</h2>
-        <p class="page-header__sub">Доказательства остатков от сотрудников</p>
-      </div>
-      <button class="btn-excel-export" id="reportsExcelBtn" title="Скачать Excel">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-        <span>Excel</span>
-      </button>
-    </div>
-
-    <!-- Сводка -->
-    <div class="reports-summary" id="reportsSummary"></div>
-
-    <!-- Поиск -->
-    <div class="reports-search">
-      <svg class="reports-search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-      <input type="text" id="reportsSearchInput" placeholder="Поиск по товару или сотруднику..." />
-      <button class="reports-search__clear" id="reportsSearchClear" style="display:none">✕</button>
-    </div>
-
-    <!-- Фильтры по филиалу -->
-    <div class="reports-filter-row">
-      <div class="reports-filter-row__label">Филиал:</div>
-      <div class="reports-filters" id="reportsBranchFilters">
-        <button class="reports-filter-btn active" data-rfilter="all">Все</button>
-        <button class="reports-filter-btn" data-rfilter="branch1">Сибирский</button>
-        <button class="reports-filter-btn" data-rfilter="branch2">Фреско</button>
-        <button class="reports-filter-btn" data-rfilter="branch3">Гелион</button>
-      </div>
-    </div>
-
-    <!-- Фильтры по категории -->
-    <div class="reports-filter-row">
-      <div class="reports-filter-row__label">Категория:</div>
-      <div class="reports-filters" id="reportsCategoryFilters">
-        <button class="reports-filter-btn active" data-cfilter="all">Все</button>
-        <button class="reports-filter-btn" data-cfilter="drinks">🥤 Напитки</button>
-        <button class="reports-filter-btn" data-cfilter="disposable">🍴 Одноразовая</button>
-        <button class="reports-filter-btn" data-cfilter="food">🍞 Продукты</button>
-        <button class="reports-filter-btn" data-cfilter="cleaning">🧴 Чистящие</button>
-        <button class="reports-filter-btn" data-cfilter="other">📦 Прочее</button>
-      </div>
-    </div>
-
-    <!-- Группированный список отчётов по датам -->
-    <div class="reports-list" id="reportsList"></div>
-
-    <div class="empty-state" id="reportsEmpty" style="display:none">
-      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="14" y="10" width="52" height="60" rx="6" stroke="#ccc" stroke-width="3"/>
-        <line x1="24" y1="26" x2="56" y2="26" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
-        <line x1="24" y1="38" x2="56" y2="38" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
-        <line x1="24" y1="50" x2="44" y2="50" stroke="#ccc" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-      <p>Пока нет отчётов</p>
-      <span>Сотрудники начнут отправлять доказательства — они появятся здесь</span>
-    </div>
-  </main>
-
-  <!-- ===== LIGHTBOX (полноэкранный просмотр фото) ===== -->
-  <div class="lightbox-overlay" id="lightboxOverlay">
-    <button class="lightbox-close" id="lightboxClose" aria-label="Закрыть">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-      </svg>
-    </button>
-    <div class="lightbox-content">
-      <img id="lightboxImg" src="" alt=""/>
-      <div class="lightbox-info">
-        <div class="lightbox-info__name" id="lightboxName"></div>
-        <div class="lightbox-info__meta" id="lightboxMeta"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== FAB: кнопка + для сотрудника ===== -->
-  <button class="fab-add-btn" id="fabAddBtn" style="display:none" aria-label="Добавить товар">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-    </svg>
-  </button>
-
-  <!-- ===== MODAL: ADD/EDIT PRODUCT ===== -->
-  <div class="modal-overlay" id="editModal">
-    <div class="modal modal--edit">
-      <button class="modal__close" id="editModalClose">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-      <h2 class="modal__heading" id="editModalTitle">Добавить товар</h2>
-
-      <div class="form-photo-upload" id="photoUploadArea">
-        <input type="file" id="photoInput" accept="image/*" style="display:none"/>
-        <div class="photo-placeholder" id="photoPlaceholder">
-          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="10" width="40" height="30" rx="5" stroke="#aaa" stroke-width="2"/>
-            <circle cx="24" cy="25" r="8" stroke="#aaa" stroke-width="2"/>
-            <circle cx="24" cy="25" r="3" fill="#aaa"/>
-            <path d="M17 10l3-4h8l3 4" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Нажмите для загрузки фото</span>
-          <small>Камера или галерея</small>
-        </div>
-        <img id="photoPreview" src="" alt="" style="display:none;" />
-        <button class="photo-remove-btn" id="photoRemoveBtn" style="display:none;">✕</button>
-      </div>
-
-      <!-- Выбор источника фото (камера / галерея) — для мобильных -->
-      <div class="photo-source-btns" id="photoSourceBtns">
-        <button class="photo-source-btn" id="btnCamera">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          Камера
-        </button>
-        <button class="photo-source-btn" id="btnGallery">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          Галерея
-        </button>
-      </div>
-
-      <!-- Поля только для менеджера -->
-      <div class="form-grid" id="managerFields">
-        <div class="form-group form-group--full">
-          <label>Название товара <span class="required">*</span></label>
-          <input type="text" id="editName" placeholder="Например: Вилки металлические" />
-        </div>
-        <div class="form-group form-group--full">
-          <label>Категория</label>
-          <select id="editCategory" class="form-select">
-            <option value="drinks">🥤 Напитки</option>
-            <option value="disposable">🍴 Одноразовая посуда</option>
-            <option value="food">🍞 Продукты</option>
-            <option value="cleaning">🧴 Чистящие средства</option>
-            <option value="other" selected>📦 Прочее</option>
-          </select>
-        </div>
-        <div class="form-group form-group--full">
-          <label>Описание</label>
-          <textarea id="editDesc" rows="2" placeholder="Дополнительная информация о товаре..."></textarea>
-        </div>
-      </div>
-
-      <!-- Превью товара (для сотрудника при редактировании) -->
-      <div class="staff-product-info" id="staffProductInfo" style="display:none">
-        <div class="staff-product-info__name" id="staffProductName"></div>
-        <div class="staff-product-info__cat" id="staffProductCat"></div>
-      </div>
-
-      <!-- Поле названия для сотрудника при добавлении нового товара -->
-      <div class="form-grid" id="staffNameFieldWrap" style="display:none">
-        <div class="form-group form-group--full">
-          <label>Название товара <span class="required">*</span></label>
-          <input type="text" id="staffEditName" placeholder="Например: Вилки металлические" />
-        </div>
-      </div>
-
-      <!-- ===== ДОЛЖНО БЫТЬ — только менеджер ===== -->
-      <div class="branches-qty-section" id="targetSection">
-        <h3 class="branches-qty-title">
-          🎯 Должно быть (норма по филиалам, шт)
-        </h3>
-        <div class="branches-qty-grid">
-          <div class="branch-qty-item branch-qty-item--target" data-branch="branch1">
-            <label>Сибирский филиал</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="target1">−</button>
-              <input type="number" id="target1" class="qty-input qty-input--target" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="target1">+</button>
-            </div>
+      <div class="users-body">
+        <div class="users-add-form">
+          <div class="form-row">
+            <div class="form-group"><label>Логин</label><input type="text" id="newUserLogin" placeholder="ivan.petrov" autocapitalize="none" autocorrect="off" /></div>
+            <div class="form-group"><label>Пароль</label><input type="text" id="newUserPassword" placeholder="••••••" autocapitalize="none" autocorrect="off" /></div>
           </div>
-          <div class="branch-qty-item branch-qty-item--target" data-branch="branch2">
-            <label>Фреско филиал</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="target2">−</button>
-              <input type="number" id="target2" class="qty-input qty-input--target" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="target2">+</button>
-            </div>
-          </div>
-          <div class="branch-qty-item branch-qty-item--target" data-branch="branch3">
-            <label>Гелион филиал</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="target3">−</button>
-              <input type="number" id="target3" class="qty-input qty-input--target" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="target3">+</button>
-            </div>
-          </div>
+          <div class="form-group"><label>Имя сотрудника</label><input type="text" id="newUserName" placeholder="Иванов Иван" /></div>
+          <button class="btn-primary" id="btnAddUser" style="width:100%;margin-top:4px;">+ Добавить сотрудника</button>
         </div>
-      </div>
-
-      <!-- ===== ИНФО СОТРУДНИКУ: должно быть ===== -->
-      <div class="staff-target-info" id="staffTargetInfo" style="display:none">
-        <div class="staff-target-info__head">
-          <span class="staff-target-info__icon">🎯</span>
-          <span class="staff-target-info__label">Должно быть в наличии:</span>
-          <span class="staff-target-info__value" id="staffTargetValue">— шт</span>
-        </div>
-        <div class="staff-target-info__hint">
-          Это значение задано менеджером. Введите ниже фактический остаток на вашем филиале.
-        </div>
-      </div>
-
-      <!-- ===== ОСТАТКИ (фактически) ===== -->
-      <div class="branches-qty-section">
-        <h3 class="branches-qty-title" id="branchesQtyTitle">📦 Остаток (фактически, шт)</h3>
-        <div class="branches-qty-grid" id="branchesQtyGrid">
-          <div class="branch-qty-item" data-branch="branch1">
-            <label>Сибирский филиал</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="qty1">−</button>
-              <input type="number" id="qty1" class="qty-input" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="qty1">+</button>
-            </div>
-            <div class="branch-qty-target-hint" id="qty1Hint"></div>
-          </div>
-          <div class="branch-qty-item" data-branch="branch2">
-            <label>Фреско филиал</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="qty2">−</button>
-              <input type="number" id="qty2" class="qty-input" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="qty2">+</button>
-            </div>
-            <div class="branch-qty-target-hint" id="qty2Hint"></div>
-          </div>
-          <div class="branch-qty-item" data-branch="branch3">
-            <label>Гелион филиал</label>
-            <div class="qty-stepper">
-              <button class="qty-btn" data-action="minus" data-target="qty3">−</button>
-              <input type="number" id="qty3" class="qty-input" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="qty3">+</button>
-            </div>
-            <div class="branch-qty-target-hint" id="qty3Hint"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ===== ПРОШЛОЕ ДОКАЗАТЕЛЬСТВО (последний отчёт сотрудника) ===== -->
-      <div class="last-proof-info" id="lastProofInfo" style="display:none">
-        <div class="last-proof-info__title">
-          <span>📸</span>
-          <span>Последний отчёт от сотрудника</span>
-        </div>
-        <div class="last-proof-info__body" id="lastProofBody"></div>
-      </div>
-
-      <!-- Удалить — только менеджер при редактировании -->
-      <button class="btn-delete-inline" id="editDeleteBtn" style="display:none">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-          <path d="M10 11v6"/><path d="M14 11v6"/>
-        </svg>
-        Удалить товар
-      </button>
-
-      <div class="form-footer">
-        <button class="btn-cancel" id="editCancelBtn">Отмена</button>
-        <button class="btn-save" id="editSaveBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-          </svg>
-          Сохранить
-        </button>
+        <div class="users-list-label">Список сотрудников</div>
+        <div class="users-list" id="usersList"></div>
       </div>
     </div>
   </div>
 
-  <!-- ===== PROOF MODAL: сотрудник доказывает остаток фотографией ===== -->
-  <div class="modal-overlay" id="proofModal">
-    <div class="modal modal--edit">
-      <button class="modal__close" id="proofModalClose">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-      <h2 class="modal__heading">📸 Доказать остаток</h2>
 
-      <div class="proof-info">
-        <div class="proof-info__name" id="proofProductName"></div>
-        <div class="proof-info__row" id="proofTargetRow">
-          <span class="proof-info__label">🎯 Должно быть:</span>
-          <span class="proof-info__value" id="proofTargetValue">— шт</span>
-        </div>
-        <div class="proof-info__row">
-          <span class="proof-info__label">📦 Сейчас в системе:</span>
-          <span class="proof-info__value" id="proofCurrentValue">— шт</span>
-        </div>
+  <!-- ═══ MANAGE CATEGORIES MODAL ═══ -->
+  <div class="overlay" id="categoriesOverlay">
+    <div class="sheet users-sheet">
+      <div class="sheet-handle"></div>
+      <div class="users-header">
+        <div class="users-title">🗂 Управление категориями</div>
+        <button class="action-btn action-close" id="categoriesClose" aria-label="Закрыть">✕</button>
       </div>
+      <div class="users-body">
+        <p class="cat-help">Добавляйте, переименовывайте, настраивайте поля и удаляйте категории. Никакого программирования — всё с помощью кнопок.</p>
 
-      <div class="proof-help">
-        Сфотографируйте товар, который у вас фактически остался, и укажите количество.
-        Менеджер получит ваш отчёт с этим фото.
-      </div>
-
-      <!-- Зона загрузки фото -->
-      <div class="form-photo-upload" id="proofPhotoArea">
-        <input type="file" id="proofPhotoInput" accept="image/*" style="display:none"/>
-        <div class="photo-placeholder" id="proofPhotoPlaceholder">
-          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="10" width="40" height="30" rx="5" stroke="#aaa" stroke-width="2"/>
-            <circle cx="24" cy="25" r="8" stroke="#aaa" stroke-width="2"/>
-            <circle cx="24" cy="25" r="3" fill="#aaa"/>
-            <path d="M17 10l3-4h8l3 4" stroke="#aaa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>Нажмите, чтобы сфотографировать</span>
-          <small>Камера или галерея</small>
-        </div>
-        <img id="proofPhotoPreview" src="" alt="" style="display:none;" />
-        <button class="photo-remove-btn" id="proofPhotoRemoveBtn" style="display:none;">✕</button>
-      </div>
-
-      <div class="photo-source-btns">
-        <button class="photo-source-btn" id="proofBtnCamera">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          Камера
-        </button>
-        <button class="photo-source-btn" id="proofBtnGallery">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          Галерея
-        </button>
-      </div>
-
-      <!-- Поле остатка -->
-      <div class="branches-qty-section">
-        <h3 class="branches-qty-title">📦 Введите фактический остаток (шт)</h3>
-        <div class="branches-qty-grid">
-          <div class="branch-qty-item">
-            <div class="qty-stepper qty-stepper--big">
-              <button class="qty-btn" data-action="minus" data-target="proofQty">−</button>
-              <input type="number" id="proofQty" class="qty-input qty-input--big" value="0" min="0" inputmode="numeric"/>
-              <button class="qty-btn" data-action="plus" data-target="proofQty">+</button>
-            </div>
-            <div class="branch-qty-target-hint" id="proofQtyHint"></div>
+        <div class="users-add-form">
+          <div class="form-row">
+            <div class="form-group"><label>Название категории</label><input type="text" id="newCatName" placeholder="Например: Канцелярия" /></div>
+            <div class="form-group"><label>Иконка (эмодзи)</label><input type="text" id="newCatIcon" placeholder="📦" maxlength="4" /></div>
           </div>
+          <div class="form-group"><label>Подзаголовок (короткое описание)</label><input type="text" id="newCatSub" placeholder="Описание категории" /></div>
+          <button class="btn-primary" id="btnAddCategory" style="width:100%;margin-top:4px;">+ Добавить категорию</button>
+        </div>
+
+        <div class="users-list-label">Существующие категории</div>
+        <div class="users-list" id="categoriesList"></div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══ EDIT CATEGORY MODAL (rename + edit fields) ═══ -->
+  <div class="overlay" id="catEditOverlay">
+    <div class="sheet edit-sheet">
+      <div class="sheet-handle"></div>
+      <div class="edit-title">✏ Редактировать категорию</div>
+      <div class="edit-cat-indicator" id="catEditIndicator"></div>
+      <div class="edit-form">
+        <div class="form-row">
+          <div class="form-group"><label>Название</label><input type="text" id="catEditName" /></div>
+          <div class="form-group"><label>Иконка (эмодзи)</label><input type="text" id="catEditIcon" maxlength="4" /></div>
+        </div>
+        <div class="form-group"><label>Подзаголовок</label><input type="text" id="catEditSub" /></div>
+
+        <div class="cat-fields-section">
+          <div class="cat-fields-header">
+            <div class="cat-fields-title">Поля категории</div>
+            <button class="btn-mini-add" id="btnAddField">+ Поле</button>
+          </div>
+          <div class="cat-fields-list" id="catFieldsList"></div>
         </div>
       </div>
-
-      <!-- Комментарий (опционально) -->
-      <div class="form-grid">
-        <div class="form-group form-group--full">
-          <label>Комментарий <span style="font-weight:400;color:var(--text-muted);font-size:11px">(необязательно)</span></label>
-          <textarea id="proofComment" rows="2" placeholder="Например: одна вилка сломалась, выкинул..."></textarea>
-        </div>
-      </div>
-
-      <div class="form-footer">
-        <button class="btn-cancel" id="proofCancelBtn">Отмена</button>
-        <button class="btn-save" id="proofSubmitBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-          Отправить отчёт
-        </button>
+      <div class="edit-footer">
+        <button class="btn-ghost" id="catEditCancel">Отмена</button>
+        <button class="btn-primary" id="catEditSave">Сохранить</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== CONFIRM DELETE PRODUCT ===== -->
-  <div class="modal-overlay" id="confirmModal">
-    <div class="modal modal--confirm">
-      <div class="confirm-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="20" fill="#FF3B30" opacity="0.1" stroke="#FF3B30" stroke-width="2"/>
-          <line x1="24" y1="14" x2="24" y2="28" stroke="#FF3B30" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="24" cy="34" r="2" fill="#FF3B30"/>
-        </svg>
+
+  <!-- ═══ MANAGE CREDENTIALS MODAL ═══ -->
+  <div class="overlay" id="credsOverlay">
+    <div class="sheet pw-sheet">
+      <div class="sheet-handle"></div>
+      <div class="pw-icon">🔑</div>
+      <div class="pw-title">Сменить логин и пароль менеджера</div>
+      <div class="pw-sub">После смены потребуется снова войти в систему.</div>
+      <div class="edit-form" style="padding-top:8px;">
+        <div class="form-group"><label>Новый логин</label><input type="text" id="newAdminLogin" placeholder="admin" autocapitalize="none" autocorrect="off" /></div>
+        <div class="form-group"><label>Новый пароль</label><input type="text" id="newAdminPassword" placeholder="••••••" autocapitalize="none" autocorrect="off" /></div>
+        <p class="pw-error" id="credsError"></p>
       </div>
-      <h2>Удалить товар?</h2>
-      <p id="confirmText">Это действие нельзя отменить.</p>
-      <div class="confirm-btns">
-        <button class="btn-cancel" id="confirmCancelBtn">Отмена</button>
-        <button class="btn-delete-confirm" id="confirmDeleteBtn">Удалить</button>
+      <div class="pw-footer">
+        <button class="btn-ghost" id="credsCancel">Отмена</button>
+        <button class="btn-primary" id="credsSave">Сохранить</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== CONFIRM DELETE ACCOUNT ===== -->
-  <div class="modal-overlay" id="accountDeleteModal">
-    <div class="modal modal--confirm">
-      <div class="confirm-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="20" fill="#FF3B30" opacity="0.1" stroke="#FF3B30" stroke-width="2"/>
-          <line x1="24" y1="14" x2="24" y2="28" stroke="#FF3B30" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="24" cy="34" r="2" fill="#FF3B30"/>
-        </svg>
-      </div>
-      <h2>Удалить аккаунт?</h2>
-      <p id="accountDeleteText">Сотрудник будет немедленно разлогинен и не сможет войти, пока вы не создадите новый аккаунт.</p>
-      <div class="confirm-btns">
-        <button class="btn-cancel" id="accountDeleteCancelBtn">Отмена</button>
-        <button class="btn-delete-confirm" id="accountDeleteConfirmBtn">Удалить</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- ===== PHOTO CHOICE SHEET (Telegram-like): камера или галерея ===== -->
-  <div class="photo-choice-sheet" id="photoChoiceSheet">
-    <div class="photo-choice-sheet__panel">
-      <div class="photo-choice-sheet__handle"></div>
-      <div class="photo-choice-sheet__title">Откуда взять фото?</div>
-      <button class="photo-choice-sheet__btn" id="photoChoiceCamera">
-        <span class="photo-choice-sheet__icon">📷</span>
-        <span class="photo-choice-sheet__text">
-          <span class="photo-choice-sheet__label">Сделать фото</span>
-          <span class="photo-choice-sheet__sub">Открыть камеру</span>
-        </span>
-      </button>
-      <button class="photo-choice-sheet__btn" id="photoChoiceGallery">
-        <span class="photo-choice-sheet__icon">🖼️</span>
-        <span class="photo-choice-sheet__text">
-          <span class="photo-choice-sheet__label">Выбрать из галереи</span>
-          <span class="photo-choice-sheet__sub">Готовое фото из памяти телефона</span>
-        </span>
-      </button>
-      <button class="photo-choice-sheet__cancel" id="photoChoiceCancel">Отмена</button>
-    </div>
-    <input type="file" id="inlinePhotoInput" accept="image/*" style="display:none"/>
-  </div>
-
-  <!-- ===== TOAST ===== -->
-  <div class="toast" id="toast"></div>
-
-  <!-- ===== PRINT AREA ===== -->
-  <div class="print-area" id="printArea" style="display:none;">
-    <div class="print-header">
-      <div class="print-logo">
-        <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" width="32" height="32">
-          <rect width="36" height="36" rx="10" fill="#1877F2"/>
-          <path d="M8 10h20M8 18h20M8 26h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
-        </svg>
-        <strong>Склад Mone</strong>
-      </div>
-      <div class="print-meta">
-        <div id="printBranchLabel">Все филиалы</div>
-        <div id="printDate"></div>
-      </div>
-    </div>
-    <h1 class="print-title" id="printTitle">Отчёт по остаткам</h1>
-    <table class="print-table" id="printTable">
-      <thead>
-        <tr id="printTableHead">
-          <th style="width:60px">Фото</th>
-          <th>Товар</th>
-          <th>Категория</th>
-          <th>Сибирский</th>
-          <th>Фреско</th>
-          <th>Гелион</th>
-          <th>Итого</th>
-        </tr>
-      </thead>
-      <tbody id="printTableBody"></tbody>
-    </table>
-    <div class="print-footer">
-      <div>Сформировано: <span id="printFooterDate"></span></div>
-      <div>Подпись: _______________________</div>
-    </div>
-  </div>
-
-  <script type="module" src="app.js"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-database-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjf9MmH-h_x1IlGSeJ-yGH_NXruW6fvzY",
+      authDomain: "nomer-a12fd.firebaseapp.com",
+      databaseURL: "https://nomer-a12fd-default-rtdb.firebaseio.com",
+      projectId: "nomer-a12fd",
+      storageBucket: "nomer-a12fd.firebasestorage.app",
+      messagingSenderId: "327818870146",
+      appId: "1:327818870146:web:51940997c21eee7377e39b"
+    };
+    firebase.initializeApp(firebaseConfig);
+    window.db = firebase.database();
+  </script>
+  <script src="app.js"></script>
 </body>
 </html>
