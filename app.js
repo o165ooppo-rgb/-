@@ -1,17 +1,3 @@
-/**
- * ============================================================
- *  СКЛАД MONE — Управление остатками по филиалам
- *  app.js — ролевой доступ, без поиска и категорий
- * ============================================================
- *
- *  АРХИТЕКТУРА АККАУНТОВ
- *  ─────────────────────
- *  • 1 менеджер  — видит и может всё
- *  • 3 филиала   — каждый видит свои товары, меняет фото и кол-во
- *
- *  Клик на карточку → сразу открывается форма редактирования.
- *  Сотрудник видит кнопку «+» → открывает фото (камера/галерея).
- */
 
 'use strict';
 
@@ -344,7 +330,13 @@ function initFirebaseListeners() {
     });
     saveLocal(STORAGE_KEY, state.products);
     state.firebaseLoaded = true;
-    renderAll();
+    // Если пользователь сейчас вводит цифру в степпер — не делаем полный ререндер,
+    // просто обновляем числовые ячейки на карточках. Это сохраняет фокус инпута.
+    if (shouldDoPartialUpdate()) {
+      state.products.forEach(p => updateCardQtyDisplay(p.id));
+    } else {
+      renderAll();
+    }
     showSyncIndicator('ok');
   }, (err) => {
     console.error('[products]', err);
@@ -1281,28 +1273,15 @@ function renderAll() {
   $('emptyState').style.display = 'none';
   $('productsGrid').innerHTML = list.map((p, i) => buildCard(p, i)).join('');
 
-  // Клик по карточке: менеджеру — открывает форму редактирования,
-  // сотруднику — раскрывает inline-панель (аккордеон) для ввода остатка.
+  // Клик по карточке: только менеджер открывает редактирование.
+  // Сотрудник не открывает ничего — все действия через степпер и иконку камеры.
   $('productsGrid').querySelectorAll('.product-card').forEach(card => {
     card.addEventListener('click', e => {
       // Игнорируем клики на интерактивных элементах внутри карточки
       if (e.target.closest('.product-card__camera-btn')) return;
-      if (e.target.closest('.product-card__inline-panel')) return;
-      if (e.target.closest('.product-card__close-expanded')) return;
-      const id = card.dataset.id;
-      if (isManager()) {
-        openEditModal(id);
-      } else {
-        toggleInlinePanel(id);
-      }
-    });
-  });
-
-  // Крестик закрытия раскрытой карточки
-  $('productsGrid').querySelectorAll('.product-card__close-expanded').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      closeInlinePanel(btn.dataset.closeId);
+      if (e.target.closest('.product-card__stepper')) return;
+      if (!isManager()) return;
+      openEditModal(card.dataset.id);
     });
   });
 
@@ -1315,55 +1294,36 @@ function renderAll() {
     });
   });
 
-  // Inline-стэппер плюс/минус
-  $('productsGrid').querySelectorAll('.inline-stepper__btn').forEach(btn => {
+  // Степпер на карточке: +/− мгновенно сохраняют новое значение
+  $('productsGrid').querySelectorAll('.product-card__stepper-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       const id = btn.dataset.pid;
-      const action = btn.dataset.inlineAction;
-      const input = document.querySelector(`[data-inline-input="${id}"]`);
+      const action = btn.dataset.qa;
+      const input = document.querySelector(`[data-qty-input="${id}"]`);
       if (!input) return;
       let v = parseInt(input.value, 10) || 0;
       v = action === 'plus' ? v + 1 : Math.max(0, v - 1);
       input.value = v;
-      updateInlineHint(id);
+      saveQtyInstant(id, v);
     });
   });
 
-  // Inline-input — обновляем подсказку при ручном вводе
-  $('productsGrid').querySelectorAll('[data-inline-input]').forEach(inp => {
-    inp.addEventListener('input', () => updateInlineHint(inp.dataset.inlineInput));
+  // Ввод числа вручную: e.stopPropagation на клик/фокус (чтобы карточка не «считала» это своим кликом),
+  // сохранение при blur (выход из поля) и при Enter.
+  $('productsGrid').querySelectorAll('[data-qty-input]').forEach(inp => {
     inp.addEventListener('click', e => e.stopPropagation());
-  });
-  $('productsGrid').querySelectorAll('[data-inline-comment]').forEach(t => {
-    t.addEventListener('click', e => e.stopPropagation());
-  });
-
-  // Кнопка «Сохранить» в inline-панели
-  $('productsGrid').querySelectorAll('[data-inline-save]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const id = btn.dataset.inlineSave;
-      submitInlineProof(id);
+    inp.addEventListener('focus', e => e.stopPropagation());
+    inp.addEventListener('blur', () => {
+      const id = inp.dataset.qtyInput;
+      let v = Math.max(0, parseInt(inp.value, 10) || 0);
+      inp.value = v;
+      saveQtyInstant(id, v);
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     });
   });
-  // Кнопка «Отмена» в inline-панели
-  $('productsGrid').querySelectorAll('[data-inline-cancel]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const id = btn.dataset.inlineCancel;
-      closeInlinePanel(id);
-    });
-  });
-
-  // Восстанавливаем уже открытые панели после ререндера
-  if (state.expandedProductIds && state.expandedProductIds.size) {
-    state.expandedProductIds.forEach(id => {
-      const card = document.querySelector(`.product-card[data-id="${id}"]`);
-      if (card) card.classList.add('is-expanded');
-      updateInlineHint(id);
-    });
-  }
 }
 
 function buildCard(product, index) {
@@ -1408,10 +1368,7 @@ function buildCard(product, index) {
       </div>`;
   }
 
-  const totalText  = showAllBranches ? `${getQty(product)} шт` : `${qty} шт`;
-  const totalLabel = showAllBranches ? 'Итого' : 'Сейчас';
-
-  // Бейдж "Должно быть"
+  // Бейдж "Должно быть" — для менеджера всегда; для сотрудника тоже (полезная инфа)
   let targetHtml = '';
   if (!showAllBranches && target > 0) {
     const isMiss = qty < target;
@@ -1431,11 +1388,7 @@ function buildCard(product, index) {
       </div>`;
   }
 
-  // Категория-чип
-  const cat = product.category || 'other';
-  const catHtml = `<div class="product-card__cat-badge">${CATEGORY_EMOJI[cat] || '📦'} ${escHtml(CATEGORY_LABELS[cat] || cat)}</div>`;
-
-  // Иконка камеры (только для сотрудника) — на месте старого бейджа статуса
+  // Иконка камеры (только для сотрудника) — для прикрепления фото-доказательства
   let cameraBtnHtml = '';
   if (isStaff()) {
     cameraBtnHtml = `
@@ -1447,67 +1400,30 @@ function buildCard(product, index) {
       </button>`;
   }
 
-  // Inline-панель «аккордеон» — раскрывается при клике (только для сотрудника)
-  let inlinePanelHtml = '';
+  // Степпер внизу карточки (только для сотрудника)
+  // Тап на − или + → сразу сохраняет. Клик по числу → редактирование, потеря фокуса → сохранение.
+  let stepperHtml = '';
   if (isStaff()) {
-    inlinePanelHtml = `
-      <div class="product-card__inline-panel" data-panel-for="${product.id}">
-        <div class="product-card__inline-inner">
-          <div class="inline-field">
-            <label class="inline-field__label">📦 Фактический остаток (шт)</label>
-            <div class="inline-stepper">
-              <button class="inline-stepper__btn" data-inline-action="minus" data-pid="${product.id}">−</button>
-              <input type="number" class="inline-stepper__input" data-inline-input="${product.id}" value="${qty}" min="0" inputmode="numeric"/>
-              <button class="inline-stepper__btn" data-inline-action="plus" data-pid="${product.id}">+</button>
-            </div>
-            <div class="inline-field__hint" data-inline-hint="${product.id}"></div>
-          </div>
-          <div class="inline-field">
-            <label class="inline-field__label">📝 Комментарий <span style="color:var(--text-muted);font-weight:400">(необязательно)</span></label>
-            <textarea class="inline-field__textarea" data-inline-comment="${product.id}" rows="2" placeholder="Например: одна сломалась, выбросил..."></textarea>
-          </div>
-          <div class="inline-actions">
-            <button class="inline-btn inline-btn--cancel" data-inline-cancel="${product.id}">Отмена</button>
-            <button class="inline-btn inline-btn--save" data-inline-save="${product.id}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              Сохранить
-            </button>
-          </div>
-        </div>
+    stepperHtml = `
+      <div class="product-card__stepper" data-stepper-for="${product.id}">
+        <button class="product-card__stepper-btn" data-qa="minus" data-pid="${product.id}" aria-label="Уменьшить">−</button>
+        <input type="number" class="product-card__stepper-input" data-qty-input="${product.id}" value="${qty}" min="0" inputmode="numeric"/>
+        <button class="product-card__stepper-btn" data-qa="plus" data-pid="${product.id}" aria-label="Увеличить">+</button>
       </div>`;
-  }
-
-  // Крестик закрытия (виден только когда карточка раскрыта)
-  let closeBtnHtml = '';
-  if (isStaff()) {
-    closeBtnHtml = `
-      <button class="product-card__close-expanded" data-close-id="${product.id}" aria-label="Свернуть">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>`;
   }
 
   return `
     <div class="product-card" data-id="${product.id}" style="animation-delay:${delay}ms">
-      ${closeBtnHtml}
       <div class="product-card__image-wrap">
         ${imageHtml}
         ${cameraBtnHtml}
       </div>
       <div class="product-card__body">
-        ${catHtml}
         <div class="product-card__name">${escHtml(product.name)}</div>
         <div class="product-card__branches">${branchesHtml}</div>
         ${targetHtml}
-        <div class="product-card__footer">
-          <span class="product-card__total-label">${totalLabel}</span>
-          <span class="product-card__total-value">${totalText}</span>
-        </div>
       </div>
-      ${inlinePanelHtml}
+      ${stepperHtml}
     </div>`;
 }
 
@@ -2029,132 +1945,133 @@ function switchPage(page) {
 }
 
 /* ===========================================================
-   INLINE PANEL (аккордеон) — сотрудник доказывает остаток
-   прямо под карточкой товара, без модального окна
+   INSTANT QTY SAVE — мгновенное сохранение остатка с карточки
+   Сотрудник нажимает +/− или вводит число вручную → сразу пишется в БД.
+   Если есть прикреплённое фото — отправляется как отчёт-доказательство.
+   Если фото нет — просто обновляется количество (и лог qtyEdit).
 =========================================================== */
-function toggleInlinePanel(productId) {
-  const card = document.querySelector(`.product-card[data-id="${productId}"]`);
-  if (!card) return;
-  if (state.expandedProductIds.has(productId)) {
-    closeInlinePanel(productId);
-  } else {
-    state.expandedProductIds.add(productId);
-    card.classList.add('is-expanded');
-    updateInlineHint(productId);
-    // Скроллим карточку в обзор, чтобы панель влезла
-    setTimeout(() => {
-      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 250);
-  }
+
+// Debounce-сохранения, чтобы быстрые тапы по +/− не спамили сеть
+const _qtySaveTimers = new Map();
+
+// Возвращает true, если сейчас не следует делать полный ререндер карточек
+// (пользователь работает с инпутом или ждёт ответа сети)
+function shouldDoPartialUpdate() {
+  if (!isStaff()) return false;
+  if (state.currentPage !== 'products') return false;
+  if (_qtySaveTimers.size > 0) return true;
+  const active = document.activeElement;
+  if (active && active.matches?.('[data-qty-input]')) return true;
+  return false;
 }
 
-function closeInlinePanel(productId) {
-  state.expandedProductIds.delete(productId);
-  state.inlinePhotos.delete(productId);
-  const card = document.querySelector(`.product-card[data-id="${productId}"]`);
-  if (card) card.classList.remove('is-expanded');
-}
-
-function updateInlineHint(productId) {
+function saveQtyInstant(productId, newQty) {
   const product = state.products.find(p => p.id === productId);
   if (!product) return;
   const myBranch = userBranch();
-  const target = product.targets?.[myBranch] ?? 0;
-  const inp = document.querySelector(`[data-inline-input="${productId}"]`);
-  const hint = document.querySelector(`[data-inline-hint="${productId}"]`);
-  if (!inp || !hint) return;
-  const qty = parseInt(inp.value, 10) || 0;
-  if (target <= 0) {
-    hint.textContent = '';
-    hint.className = 'inline-field__hint';
-    return;
-  }
-  const diff = qty - target;
-  if (diff < 0) {
-    hint.textContent = `⚠ должно быть ${target}, не хватает ${Math.abs(diff)}`;
-    hint.className = 'inline-field__hint hint-low';
-  } else if (diff === 0) {
-    hint.textContent = `✓ всё на месте (норма ${target})`;
-    hint.className = 'inline-field__hint hint-ok';
-  } else {
-    hint.textContent = `✓ норма ${target}, у вас на ${diff} больше`;
-    hint.className = 'inline-field__hint hint-ok';
-  }
-}
-
-// Открываем выбор «Камера / Галерея» для товара (как в Telegram при отправке фото)
-function openInlinePhotoChoice(productId) {
-  // Если карточка ещё не раскрыта — раскрываем её, чтобы пользователь видел поля
-  if (!state.expandedProductIds.has(productId)) {
-    toggleInlinePanel(productId);
-  }
-  state.pendingPhotoForProductId = productId;
-  // Показываем bottom-sheet выбора источника
-  const sheet = $('photoChoiceSheet');
-  if (sheet) sheet.classList.add('active');
-}
-
-async function submitInlineProof(productId) {
-  const product = state.products.find(p => p.id === productId);
-  if (!product) { showToast('⚠ Товар не найден', 'error'); return; }
-
-  const photo = state.inlinePhotos.get(productId);
-  if (!photo) {
-    showToast('📸 Сначала сфотографируйте товар (нажмите на иконку камеры)', 'error');
-    return;
-  }
-
-  const inp = document.querySelector(`[data-inline-input="${productId}"]`);
-  const cmt = document.querySelector(`[data-inline-comment="${productId}"]`);
-  const qty = Math.max(0, parseInt(inp?.value, 10) || 0);
-  const comment = (cmt?.value || '').trim();
-  const myBranch = userBranch();
-  const target = product.targets?.[myBranch] ?? 0;
   const oldQty = product.branches?.[myBranch] ?? 0;
 
-  const proofEntry = {
-    id:          uid(),
-    productId:   product.id,
-    productName: product.name,
-    category:    product.category || 'other',
-    photo,
-    qty,
-    target,
-    branch:      myBranch,
-    userId:      state.currentUser.id,
-    userName:    state.currentUser.name || state.currentUser.username,
-    comment,
-    ts:          Date.now(),
+  newQty = Math.max(0, parseInt(newQty, 10) || 0);
+  if (newQty === oldQty) return; // ничего не изменилось
+
+  // Сразу обновляем локально, чтобы UI откликался мгновенно
+  const updated = {
+    ...product,
+    branches: { ...product.branches, [myBranch]: newQty },
   };
+  const idx = state.products.findIndex(p => p.id === productId);
+  if (idx > -1) state.products[idx] = updated;
+  saveLocal(STORAGE_KEY, state.products);
 
-  const saveBtn = document.querySelector(`[data-inline-save="${productId}"]`);
-  if (saveBtn) saveBtn.disabled = true;
+  // Мгновенно обновляем отображение остатка на самой карточке (без полного ререндера)
+  updateCardQtyDisplay(productId);
 
-  try {
-    await fbAddProof(proofEntry);
+  // Откладываем запись в Firebase на 350мс — чтобы спам кликов слился в одну запись
+  if (_qtySaveTimers.has(productId)) clearTimeout(_qtySaveTimers.get(productId));
+  _qtySaveTimers.set(productId, setTimeout(async () => {
+    _qtySaveTimers.delete(productId);
+    const target = product.targets?.[myBranch] ?? 0;
+    const photo = state.inlinePhotos.get(productId); // если есть прикреплённое фото
 
-    const updated = {
-      ...product,
-      branches: { ...product.branches, [myBranch]: qty },
-    };
-    const idx = state.products.findIndex(p => p.id === product.id);
-    if (idx > -1) state.products[idx] = updated;
-    saveLocal(STORAGE_KEY, state.products);
-    await fbSaveProduct(updated);
+    try {
+      if (photo) {
+        // Сохраняем как отчёт-доказательство (с фото)
+        const proofEntry = {
+          id:          uid(),
+          productId:   productId,
+          productName: product.name,
+          category:    product.category || 'other',
+          photo,
+          qty:         newQty,
+          target,
+          branch:      myBranch,
+          userId:      state.currentUser.id,
+          userName:    state.currentUser.name || state.currentUser.username,
+          comment:     '',
+          ts:          Date.now(),
+        };
+        await fbAddProof(proofEntry);
+        await writeLog('proofSubmit',
+          `"${product.name}": ${newQty} шт${target ? ` / норма ${target}` : ''}`,
+          { productId, productName: product.name, oldQty, newQty, target });
+        // Сбрасываем фото — оно «израсходовано»
+        state.inlinePhotos.delete(productId);
+        const card = document.querySelector(`.product-card[data-id="${productId}"]`);
+        if (card) card.classList.remove('has-photo');
+        showToast(`✓ Отчёт сохранён: ${newQty} шт`, 'success');
+      } else {
+        // Простое обновление количества (без фото) — пишем лог qtyEdit
+        await writeLog('qtyEdit',
+          `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма ${target})` : ''}`,
+          { productId, productName: product.name, oldQty, newQty, target });
+        showToast(`✓ Сохранено: ${newQty} шт`, 'success');
+      }
+      await fbSaveProduct(updated);
+    } catch (err) {
+      console.error('saveQtyInstant error', err);
+      showToast('⚠ Ошибка сохранения, попробуйте ещё раз', 'error');
+    }
+  }, 350));
+}
 
-    await writeLog('proofSubmit',
-      `"${product.name}": ${qty} шт${target ? ` / норма ${target}` : ''}` +
-      (comment ? ` — ${comment}` : ''),
-      { productId: product.id, productName: product.name, oldQty, newQty: qty, target });
+// Обновляет числа на самой карточке без полного ререндера, чтобы input не «прыгал»
+function updateCardQtyDisplay(productId) {
+  const product = state.products.find(p => p.id === productId);
+  if (!product) return;
+  const card = document.querySelector(`.product-card[data-id="${productId}"]`);
+  if (!card) return;
+  const myBranch = userBranch();
+  const qty = product.branches?.[myBranch] ?? 0;
+  const target = product.targets?.[myBranch] ?? 0;
 
-    showToast('✓ Отчёт отправлен менеджеру', 'success');
-    closeInlinePanel(productId);
-  } catch (err) {
-    console.error('Inline proof error', err);
-    showToast('⚠ Ошибка отправки отчёта', 'error');
-  } finally {
-    if (saveBtn) saveBtn.disabled = false;
+  // Обновляем строку "Остаток: X шт"
+  const qtyCell = card.querySelector('.branch-row__qty');
+  if (qtyCell) {
+    const cls = qty === 0 ? 'branch-row__qty--out' : qty <= 3 ? 'branch-row__qty--low' : '';
+    qtyCell.className = 'branch-row__qty ' + cls;
+    qtyCell.textContent = `${qty} шт`;
   }
+
+  // Обновляем бейдж "Должно быть"
+  const targetBadge = card.querySelector('.product-card__target-value');
+  if (targetBadge && target > 0) {
+    targetBadge.textContent = `${qty} / ${target}`;
+    const targetBox = card.querySelector('.product-card__target');
+    if (targetBox) {
+      targetBox.classList.toggle('product-card__target--miss', qty < target);
+    }
+  }
+
+  // Синхронизируем input степпера (на случай если изменение пришло не через input)
+  const inp = card.querySelector(`[data-qty-input="${productId}"]`);
+  if (inp && document.activeElement !== inp) inp.value = qty;
+}
+
+// Открываем выбор «Камера / Галерея» для товара
+function openInlinePhotoChoice(productId) {
+  state.pendingPhotoForProductId = productId;
+  const sheet = $('photoChoiceSheet');
+  if (sheet) sheet.classList.add('active');
 }
 
 // Инициализация bottom-sheet выбора «Камера / Галерея»
@@ -2192,12 +2109,9 @@ function initPhotoChoiceSheet() {
     try {
       const dataUrl = await compressImage(file);
       state.inlinePhotos.set(pid, dataUrl);
-      // Подсвечиваем карточку — фото готово
       const card = document.querySelector(`.product-card[data-id="${pid}"]`);
       if (card) card.classList.add('has-photo');
-      // Раскрываем панель если ещё не раскрыта
-      if (!state.expandedProductIds.has(pid)) toggleInlinePanel(pid);
-      showToast('📸 Фото готово — введите остаток и сохраните', 'success');
+      showToast('📸 Фото прикреплено — следующее изменение остатка будет с фото', 'success');
     } catch (err) {
       console.error(err);
       showToast('⚠ Ошибка загрузки фото', 'error');
@@ -2205,25 +2119,28 @@ function initPhotoChoiceSheet() {
   });
 }
 
-
+/* ===========================================================
+   PROOF MODAL — резервная модалка (больше не используется, но
+   функции оставлены на случай повторного включения)
+=========================================================== */
 function initProofPhotoUpload() {
   const input    = $('proofPhotoInput');
+  if (!input) return;
   const camBtn   = $('proofBtnCamera');
   const galBtn   = $('proofBtnGallery');
   const area     = $('proofPhotoArea');
   const removeBtn= $('proofPhotoRemoveBtn');
-  if (!input) return;
 
-  camBtn.addEventListener('click', () => {
+  if (camBtn) camBtn.addEventListener('click', () => {
     input.setAttribute('capture', 'environment');
     input.click();
   });
-  galBtn.addEventListener('click', () => {
+  if (galBtn) galBtn.addEventListener('click', () => {
     input.removeAttribute('capture');
     input.click();
   });
-  area.addEventListener('click', e => {
-    if (e.target === removeBtn || removeBtn.contains(e.target)) return;
+  if (area) area.addEventListener('click', e => {
+    if (removeBtn && (e.target === removeBtn || removeBtn.contains(e.target))) return;
     input.removeAttribute('capture');
     input.click();
   });
@@ -2234,168 +2151,45 @@ function initProofPhotoUpload() {
     try {
       const dataUrl = await compressImage(file);
       state.proofPhotoDataUrl = dataUrl;
-      $('proofPhotoPreview').src = dataUrl;
-      $('proofPhotoPreview').style.display = 'block';
-      $('proofPhotoPlaceholder').style.display = 'none';
-      $('proofPhotoRemoveBtn').style.display = 'block';
+      const prev = $('proofPhotoPreview');
+      const ph   = $('proofPhotoPlaceholder');
+      const rm   = $('proofPhotoRemoveBtn');
+      if (prev) { prev.src = dataUrl; prev.style.display = 'block'; }
+      if (ph)   ph.style.display = 'none';
+      if (rm)   rm.style.display = 'block';
     } catch (err) {
       console.error(err);
       showToast('⚠ Ошибка загрузки фото', 'error');
     }
   });
 
-  removeBtn.addEventListener('click', e => {
+  if (removeBtn) removeBtn.addEventListener('click', e => {
     e.stopPropagation();
     state.proofPhotoDataUrl = null;
     input.value = '';
-    $('proofPhotoPreview').style.display = 'none';
-    $('proofPhotoPlaceholder').style.display = 'flex';
-    $('proofPhotoRemoveBtn').style.display = 'none';
+    const prev = $('proofPhotoPreview');
+    const ph   = $('proofPhotoPlaceholder');
+    if (prev) prev.style.display = 'none';
+    if (ph)   ph.style.display = 'flex';
+    removeBtn.style.display = 'none';
   });
 }
 
 function initProofEvents() {
-  $('proofModalClose').addEventListener('click', () => closeOverlay($('proofModal')));
-  $('proofCancelBtn').addEventListener('click',  () => closeOverlay($('proofModal')));
-  $('proofModal').addEventListener('click', e => {
-    if (e.target === $('proofModal')) closeOverlay($('proofModal'));
-  });
-  $('proofSubmitBtn').addEventListener('click', submitProof);
-
-  // Подсказка норма vs введённый остаток
-  const qtyInput = $('proofQty');
-  if (qtyInput) {
-    qtyInput.addEventListener('input', updateProofHint);
-  }
+  const m = $('proofModal');
+  if (!m) return;
+  const close = $('proofModalClose');
+  const cancel = $('proofCancelBtn');
+  const submit = $('proofSubmitBtn');
+  if (close)  close.addEventListener('click', () => closeOverlay(m));
+  if (cancel) cancel.addEventListener('click', () => closeOverlay(m));
+  m.addEventListener('click', e => { if (e.target === m) closeOverlay(m); });
+  if (submit) submit.addEventListener('click', submitProof);
 }
 
-function updateProofHint() {
-  const product = state.products.find(p => p.id === state.proofProductId);
-  if (!product) return;
-  const myBranch = userBranch();
-  const target = product.targets?.[myBranch] ?? 0;
-  const qty = parseInt($('proofQty').value, 10) || 0;
-  const hint = $('proofQtyHint');
-  if (!hint) return;
-  if (target <= 0) {
-    hint.textContent = '';
-    hint.className = 'branch-qty-target-hint';
-    return;
-  }
-  const diff = qty - target;
-  if (diff < 0) {
-    hint.textContent = `⚠ должно быть ${target}, не хватает ${Math.abs(diff)}`;
-    hint.className = 'branch-qty-target-hint hint-low';
-  } else if (diff === 0) {
-    hint.textContent = `✓ всё на месте (норма ${target})`;
-    hint.className = 'branch-qty-target-hint hint-ok';
-  } else {
-    hint.textContent = `✓ норма ${target}, у вас на ${diff} больше`;
-    hint.className = 'branch-qty-target-hint hint-ok';
-  }
-}
+function openProofModal() { /* не используется */ }
+async function submitProof() { /* не используется */ }
 
-function openProofModal(productId) {
-  if (!isStaff()) return;
-  const product = state.products.find(p => p.id === productId);
-  if (!product) return;
-  state.proofProductId = productId;
-  state.proofPhotoDataUrl = null;
-
-  const myBranch = userBranch();
-  const target = product.targets?.[myBranch] ?? 0;
-  const current = product.branches?.[myBranch] ?? 0;
-
-  $('proofProductName').textContent = product.name;
-  $('proofTargetValue').textContent = target > 0 ? `${target} шт` : 'не задано';
-  $('proofCurrentValue').textContent = `${current} шт`;
-  // Подсказку "должно быть" скрываем, если норма не задана
-  $('proofTargetRow').style.display = target > 0 ? '' : 'none';
-
-  // Пред-заполняем поле текущим значением
-  $('proofQty').value = current;
-  $('proofComment').value = '';
-
-  // Сброс фото
-  $('proofPhotoPreview').src = '';
-  $('proofPhotoPreview').style.display = 'none';
-  $('proofPhotoPlaceholder').style.display = 'flex';
-  $('proofPhotoRemoveBtn').style.display = 'none';
-  $('proofPhotoInput').value = '';
-
-  updateProofHint();
-  openOverlay($('proofModal'));
-}
-
-async function submitProof() {
-  const product = state.products.find(p => p.id === state.proofProductId);
-  if (!product) { showToast('⚠ Товар не найден', 'error'); return; }
-
-  if (!state.proofPhotoDataUrl) {
-    showToast('📸 Сначала сфотографируйте товар', 'error');
-    return;
-  }
-
-  const qty = Math.max(0, parseInt($('proofQty').value, 10) || 0);
-  const comment = $('proofComment').value.trim();
-  const myBranch = userBranch();
-  const target = product.targets?.[myBranch] ?? 0;
-  const oldQty = product.branches?.[myBranch] ?? 0;
-
-  const proofEntry = {
-    id:          uid(),
-    productId:   product.id,
-    productName: product.name,
-    category:    product.category || 'other',
-    photo:       state.proofPhotoDataUrl,
-    qty,
-    target,
-    branch:      myBranch,
-    userId:      state.currentUser.id,
-    userName:    state.currentUser.name || state.currentUser.username,
-    comment,
-    ts:          Date.now(),
-  };
-
-  // Блокируем кнопку
-  const btn = $('proofSubmitBtn');
-  btn.disabled = true;
-
-  try {
-    // 1. Сохраняем proof
-    await fbAddProof(proofEntry);
-
-    // 2. Обновляем фактический остаток
-    const updated = {
-      ...product,
-      branches: { ...product.branches, [myBranch]: qty },
-    };
-    const idx = state.products.findIndex(p => p.id === product.id);
-    if (idx > -1) state.products[idx] = updated;
-    saveLocal(STORAGE_KEY, state.products);
-    await fbSaveProduct(updated);
-
-    // 3. Лог
-    await writeLog('proofSubmit',
-      `"${product.name}": ${qty} шт${target ? ` / норма ${target}` : ''}` +
-      (comment ? ` — ${comment}` : ''),
-      {
-        productId: product.id,
-        productName: product.name,
-        oldQty, newQty: qty, target,
-      });
-
-    showToast('✓ Отчёт отправлен менеджеру', 'success');
-    closeOverlay($('proofModal'));
-    state.proofProductId = null;
-    state.proofPhotoDataUrl = null;
-  } catch (err) {
-    console.error('Proof submit error', err);
-    showToast('⚠ Ошибка отправки отчёта', 'error');
-  } finally {
-    btn.disabled = false;
-  }
-}
 
 /* ===========================================================
    GALLERY PAGE — фотографии товаров с филиалом и датой
