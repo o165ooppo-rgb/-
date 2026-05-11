@@ -4383,3 +4383,166 @@ body.role-staff .drawer-item--branch { display: none !important; }
   .product-card__stepper-input { font-size: 20px; }
   .product-card__stepper-btn { font-size: 26px; }
 }
+
+/* ============================================================
+   ===== SPLASH SCREEN (анимация логотипа при старте) =====
+============================================================ */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background: #fff;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  /* анимация исчезновения после показа */
+  animation: splashFadeOut 0.5s ease 2.2s forwards;
+}
+
+.splash-screen.hidden {
+  display: none !important;
+}
+
+.splash-logo {
+  width: min(80vw, 520px);
+  max-width: 520px;
+  /* Появление сплеша: масштаб от 0.7 до 1 + лёгкое покачивание */
+  animation:
+    splashEntrance 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) backwards,
+    splashFloat 2.4s ease-in-out 0.9s infinite alternate;
+}
+.splash-logo svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Подпись под лого — появляется чуть позже */
+.splash-tagline {
+  font-family: var(--font, 'Inter', sans-serif);
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  opacity: 0;
+  animation: splashTaglineIn 0.8s ease 0.7s forwards;
+}
+
+/* === АНИМАЦИИ === */
+
+/* Логотип: входит масштабированием с лёгким bounce */
+@keyframes splashEntrance {
+  0% {
+    transform: scale(0.5) rotate(-3deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.04) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+/* Плавающее движение после появления */
+@keyframes splashFloat {
+  from { transform: translateY(0) scale(1); }
+  to   { transform: translateY(-6px) scale(1.015); }
+}
+
+/* Tagline появление */
+@keyframes splashTaglineIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Уход сплеш-экрана */
+@keyframes splashFadeOut {
+  from {
+    opacity: 1;
+    visibility: visible;
+  }
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* === Отдельные части логотипа: мазки и текст появляются последовательно === */
+
+.splash-brush {
+  opacity: 0;
+  transform-origin: center;
+}
+.splash-brush--blue {
+  animation: brushSwipeLeft 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
+}
+.splash-brush--red {
+  animation: brushSwipeRight 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.25s forwards;
+}
+@keyframes brushSwipeLeft {
+  from { opacity: 0; transform: translateX(-40px) skewX(-10deg); }
+  to   { opacity: 1; transform: translateX(0) skewX(0); }
+}
+@keyframes brushSwipeRight {
+  from { opacity: 0; transform: translateX(40px) skewX(10deg); }
+  to   { opacity: 1; transform: translateX(0) skewX(0); }
+}
+
+/* Текст Mone — появляется после мазков */
+.splash-text--main {
+  opacity: 0;
+  animation: splashTextIn 0.6s ease 0.5s forwards;
+}
+.splash-underline {
+  opacity: 0;
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: splashUnderlineIn 0.4s ease 0.85s forwards;
+}
+@keyframes splashUnderlineIn {
+  to { opacity: 1; stroke-dashoffset: 0; }
+}
+
+/* Подпись CAFÉ & BAKERY */
+.splash-text--sub {
+  opacity: 0;
+  animation: splashTextIn 0.5s ease 1.0s forwards;
+}
+
+@keyframes splashTextIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* === Адаптация под мобильный === */
+@media (max-width: 600px) {
+  .splash-logo { width: 86vw; }
+  .splash-tagline {
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+}
+
+/* === Reduced motion — для тех, кто отключил анимации === */
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen {
+    animation: splashFadeOut 0.3s ease 1.0s forwards;
+  }
+  .splash-logo,
+  .splash-brush,
+  .splash-text--main,
+  .splash-text--sub,
+  .splash-underline,
+  .splash-tagline {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
