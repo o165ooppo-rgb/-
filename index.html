@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -15,8 +14,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <!-- SheetJS — экспорт отчётов в Excel (.xlsx) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <!-- SheetJS со стилями (xlsx-js-style) — экспорт красивых .xlsx отчётов -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 </head>
 <body>
 
@@ -96,8 +95,8 @@
       </div>
 
       <div class="manager-tabs">
-        <button class="manager-tab active" data-tab="users">👥 Аккаунты</button>
-        <button class="manager-tab" data-tab="logs">📋 Журнал</button>
+        <button class="manager-tab active" data-tab="users">Аккаунты</button>
+        <button class="manager-tab" data-tab="logs">Журнал</button>
       </div>
 
       <div class="manager-tab-content" id="tabUsers">
@@ -190,6 +189,15 @@
       <div class="header__actions">
         <span class="sync-indicator sync--connecting" id="syncIndicator">⏳ Подключение...</span>
 
+        <!-- Кнопка фильтра — в правом верхнем углу, рядом с пользовательской панелью -->
+        <button class="btn-filter btn-filter--header" id="filterBtn" title="Фильтр">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+          </svg>
+          <span class="btn-filter__text">Фильтр</span>
+          <span class="btn-filter__badge" id="filterBadge" style="display:none">0</span>
+        </button>
+
         <button class="btn-manager" id="managerPanelBtn" style="display:none" title="Панель менеджера">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span>Менеджер</span>
@@ -267,14 +275,14 @@
         <div class="drawer-section__title">Навигация</div>
 
         <button class="drawer-item drawer-nav-item active" data-page="products">
-          <span class="drawer-item__icon">📦</span>
+          <span class="drawer-item__icon">▣</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Товары</span>
           </span>
         </button>
 
         <button class="drawer-item drawer-nav-item" data-page="gallery">
-          <span class="drawer-item__icon">🖼️</span>
+          <span class="drawer-item__icon">▤</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Галерея</span>
             <span class="drawer-item__sub">Фото товаров</span>
@@ -282,7 +290,7 @@
         </button>
 
         <button class="drawer-item drawer-nav-item" data-page="reports" id="drawerReportsBtn" style="display:none">
-          <span class="drawer-item__icon">📊</span>
+          <span class="drawer-item__icon">▦</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Отчёты</span>
             <span class="drawer-item__sub">Только менеджер</span>
@@ -294,7 +302,7 @@
         <div class="drawer-section__title">Действия</div>
 
         <button class="drawer-item" id="drawerBranchBtn" style="display:none">
-          <span class="drawer-item__icon">📍</span>
+          <span class="drawer-item__icon">●</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Филиал</span>
             <span class="drawer-item__sub" id="drawerBranchSub">Все филиалы</span>
@@ -305,21 +313,21 @@
         </button>
 
         <button class="drawer-item" id="drawerAddBtn" style="display:none">
-          <span class="drawer-item__icon">➕</span>
+          <span class="drawer-item__icon">+</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Добавить товар</span>
           </span>
         </button>
 
         <button class="drawer-item" id="drawerPrintBtn">
-          <span class="drawer-item__icon">🖨️</span>
+          <span class="drawer-item__icon">▤</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Печать отчёта</span>
           </span>
         </button>
 
         <button class="drawer-item" id="drawerExcelBtn" style="display:none">
-          <span class="drawer-item__icon">📗</span>
+          <span class="drawer-item__icon">▤</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Скачать Excel</span>
             <span class="drawer-item__sub">.xlsx файл</span>
@@ -327,7 +335,7 @@
         </button>
 
         <button class="drawer-item" id="drawerManagerBtn" style="display:none">
-          <span class="drawer-item__icon">👥</span>
+          <span class="drawer-item__icon">●●</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Панель менеджера</span>
           </span>
@@ -336,7 +344,7 @@
 
       <div class="drawer-footer">
         <button class="drawer-item drawer-item--danger" id="drawerLogoutBtn">
-          <span class="drawer-item__icon">🚪</span>
+          <span class="drawer-item__icon">×</span>
           <span class="drawer-item__text">
             <span class="drawer-item__label">Выйти из аккаунта</span>
           </span>
@@ -357,7 +365,7 @@
       <p class="branch-modal__sub">Покажем остатки только этого филиала</p>
       <div class="branch-modal__list" id="branchModalList">
         <button class="branch-option active" data-branch="all">
-          <div class="branch-option__icon">🏢</div>
+          <div class="branch-option__icon">▣</div>
           <div class="branch-option__content">
             <div class="branch-option__name">Все филиалы</div>
             <div class="branch-option__desc" id="branchStatAll">— товаров</div>
@@ -369,7 +377,7 @@
           </div>
         </button>
         <button class="branch-option" data-branch="branch1">
-          <div class="branch-option__icon">🏪</div>
+          <div class="branch-option__icon">▢</div>
           <div class="branch-option__content">
             <div class="branch-option__name">Сибирский</div>
             <div class="branch-option__desc" id="branchStat1">— товаров</div>
@@ -381,7 +389,7 @@
           </div>
         </button>
         <button class="branch-option" data-branch="branch2">
-          <div class="branch-option__icon">🏪</div>
+          <div class="branch-option__icon">▢</div>
           <div class="branch-option__content">
             <div class="branch-option__name">Фреско</div>
             <div class="branch-option__desc" id="branchStat2">— товаров</div>
@@ -393,7 +401,7 @@
           </div>
         </button>
         <button class="branch-option" data-branch="branch3">
-          <div class="branch-option__icon">🏪</div>
+          <div class="branch-option__icon">▢</div>
           <div class="branch-option__content">
             <div class="branch-option__name">Гелион</div>
             <div class="branch-option__desc" id="branchStat3">— товаров</div>
@@ -408,37 +416,43 @@
     </div>
   </div>
 
-  <!-- ===== TOOLBAR (только счётчик и фильтр, без поиска) ===== -->
+  <!-- ===== TOOLBAR (только счётчик товаров; фильтр перенесён в шапку) ===== -->
   <div class="toolbar" id="mainToolbar" style="display:none">
     <div class="toolbar__inner">
       <div class="toolbar__row">
         <div class="stats-bar">
           <span id="statsText">Товаров: 0</span>
         </div>
-
-        <button class="btn-filter" id="filterBtn" aria-label="Открыть фильтр">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-          </svg>
-          <span>Фильтр</span>
-          <span class="btn-filter__badge" id="filterBadge" style="display:none">0</span>
-        </button>
       </div>
     </div>
   </div>
 
-  <!-- ===== FILTER MODAL (без категории) ===== -->
+  <!-- ===== FILTER MODAL (поиск + остатки + категории + сортировка) ===== -->
   <div class="modal-overlay" id="filterModal">
     <div class="modal modal--filter">
       <button class="modal__close" id="filterModalClose" aria-label="Закрыть">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-      <h2 class="filter-modal__title">Фильтр и сортировка</h2>
-      <p class="filter-modal__sub" id="filterSubtitle">Сколько товаров осталось</p>
+      <h2 class="filter-modal__title">Фильтр</h2>
+      <p class="filter-modal__sub" id="filterSubtitle">Найдите нужные товары</p>
+
+      <!-- Поиск -->
+      <div class="filter-section">
+        <div class="filter-section__title">Поиск</div>
+        <div class="filter-search-wrap">
+          <svg class="filter-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="filterSearchInput" class="filter-search-input" placeholder="Название товара..." autocomplete="off"/>
+          <button class="filter-search-clear" id="filterSearchClear" aria-label="Очистить" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
 
       <!-- Остатки -->
       <div class="filter-section">
-        <div class="filter-section__title">📦 Остатки</div>
+        <div class="filter-section__title">Остатки</div>
         <div class="filter-stocks" id="filterStocks">
           <button class="filter-stock active" data-stock="all">
             <span class="filter-stock__dot filter-stock__dot--all"></span>
@@ -463,17 +477,22 @@
         </div>
       </div>
 
-      <!-- Сводка -->
+      <!-- Категория -->
       <div class="filter-section">
-        <div class="filter-section__title" id="filterSummaryTitle">📊 Сводка</div>
-        <div class="filter-summary" id="filterSummary"></div>
+        <div class="filter-section__title">
+          <span>Категория</span>
+          <button type="button" class="filter-section__action" id="filterManageCatsBtn" style="display:none">Управлять</button>
+        </div>
+        <select id="filterCategorySelect" class="filter-fullselect">
+          <option value="all">Все категории</option>
+        </select>
       </div>
 
       <!-- Сортировка -->
       <div class="filter-section">
-        <div class="filter-section__title">↕ Сортировка</div>
+        <div class="filter-section__title">Сортировка</div>
         <select id="filterSortSelect" class="filter-fullselect">
-          <option value="smart">Умная сортировка (мало → много)</option>
+          <option value="manual">По умолчанию (как добавили)</option>
           <option value="name">По названию (А → Я)</option>
           <option value="qty-asc">Кол-во: меньше → больше</option>
           <option value="qty-desc">Кол-во: больше → меньше</option>
@@ -484,6 +503,25 @@
         <button class="btn-cancel" id="filterResetBtn">Сбросить</button>
         <button class="btn-save" id="filterApplyBtn" style="background:var(--accent);color:#fff">Применить</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ===== CATEGORIES MANAGE MODAL (только менеджер) ===== -->
+  <div class="modal-overlay" id="categoriesModal">
+    <div class="modal modal--password">
+      <button class="modal__close" id="categoriesModalClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <h2 style="margin-bottom:6px;font-size:18px;font-weight:800;">Категории товаров</h2>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Добавьте, переименуйте или удалите категории</p>
+
+      <div class="categories-list" id="categoriesList"></div>
+
+      <div class="categories-add-row">
+        <input type="text" id="newCategoryName" class="auth-standalone-input" placeholder="Название новой категории" autocomplete="off"/>
+        <button class="btn-save" id="addCategoryBtn">Добавить</button>
+      </div>
+      <div class="auth-error" id="catError" style="margin-top:8px"></div>
     </div>
   </div>
 
@@ -504,7 +542,7 @@
   <!-- ===== PAGE: GALLERY ===== -->
   <main class="main page page--gallery" id="pageGallery" style="display:none">
     <div class="page-header">
-      <div class="page-header__icon">🖼️</div>
+      <div class="page-header__icon">▤</div>
       <div class="page-header__text">
         <h2 class="page-header__title">Галерея фото товаров</h2>
         <p class="page-header__sub" id="galleryPageSub">Все фотографии товаров</p>
@@ -512,10 +550,10 @@
     </div>
 
     <div class="reports-filters" id="galleryFilters" style="display:none">
-      <button class="reports-filter-btn active" data-gfilter="all">🏢 Все филиалы</button>
-      <button class="reports-filter-btn" data-gfilter="branch1">🏪 Сибирский</button>
-      <button class="reports-filter-btn" data-gfilter="branch2">🏪 Фреско</button>
-      <button class="reports-filter-btn" data-gfilter="branch3">🏪 Гелион</button>
+      <button class="reports-filter-btn active" data-gfilter="all">Все филиалы</button>
+      <button class="reports-filter-btn" data-gfilter="branch1">Сибирский</button>
+      <button class="reports-filter-btn" data-gfilter="branch2">Фреско</button>
+      <button class="reports-filter-btn" data-gfilter="branch3">Гелион</button>
     </div>
 
     <div class="gallery-grid" id="galleryGrid"></div>
@@ -534,7 +572,7 @@
   <!-- ===== PAGE: REPORTS (только менеджер) ===== -->
   <main class="main page page--reports" id="pageReports" style="display:none">
     <div class="page-header">
-      <div class="page-header__icon">📊</div>
+      <div class="page-header__icon">▦</div>
       <div class="page-header__text">
         <h2 class="page-header__title">Отчёты по филиалам</h2>
         <p class="page-header__sub">Доказательства остатков от сотрудников</p>
@@ -576,11 +614,6 @@
       <div class="reports-filter-row__label">Категория:</div>
       <div class="reports-filters" id="reportsCategoryFilters">
         <button class="reports-filter-btn active" data-cfilter="all">Все</button>
-        <button class="reports-filter-btn" data-cfilter="drinks">🥤 Напитки</button>
-        <button class="reports-filter-btn" data-cfilter="disposable">🍴 Одноразовая</button>
-        <button class="reports-filter-btn" data-cfilter="food">🍞 Продукты</button>
-        <button class="reports-filter-btn" data-cfilter="cleaning">🧴 Чистящие</button>
-        <button class="reports-filter-btn" data-cfilter="other">📦 Прочее</button>
       </div>
     </div>
 
@@ -667,18 +700,21 @@
           <input type="text" id="editName" placeholder="Например: Вилки металлические" />
         </div>
         <div class="form-group form-group--full">
-          <label>Категория</label>
-          <select id="editCategory" class="form-select">
-            <option value="drinks">🥤 Напитки</option>
-            <option value="disposable">🍴 Одноразовая посуда</option>
-            <option value="food">🍞 Продукты</option>
-            <option value="cleaning">🧴 Чистящие средства</option>
-            <option value="other" selected>📦 Прочее</option>
-          </select>
+          <label>
+            <span>Категория</span>
+            <button type="button" class="inline-link-btn" id="editManageCatsBtn">Управлять</button>
+          </label>
+          <select id="editCategory" class="form-select"></select>
         </div>
-        <div class="form-group form-group--full">
-          <label>Описание</label>
-          <textarea id="editDesc" rows="2" placeholder="Дополнительная информация о товаре..."></textarea>
+        <!-- При создании нового товара — менеджер выбирает в КАКОЙ филиал добавить -->
+        <div class="form-group form-group--full" id="editBranchSelectWrap" style="display:none">
+          <label>Филиал <span class="required">*</span></label>
+          <select id="editBranchSelect" class="form-select">
+            <option value="branch1">Сибирский филиал</option>
+            <option value="branch2">Фреско филиал</option>
+            <option value="branch3">Гелион филиал</option>
+          </select>
+          <div class="form-hint">Товар будет добавлен только в выбранный филиал. В другие — добавьте отдельно.</div>
         </div>
       </div>
 
@@ -699,7 +735,7 @@
       <!-- ===== ДОЛЖНО БЫТЬ — только менеджер ===== -->
       <div class="branches-qty-section" id="targetSection">
         <h3 class="branches-qty-title">
-          🎯 Должно быть (норма по филиалам, шт)
+          Должно быть (норма по филиалам, шт)
         </h3>
         <div class="branches-qty-grid">
           <div class="branch-qty-item branch-qty-item--target" data-branch="branch1">
@@ -732,7 +768,7 @@
       <!-- ===== ИНФО СОТРУДНИКУ: должно быть ===== -->
       <div class="staff-target-info" id="staffTargetInfo" style="display:none">
         <div class="staff-target-info__head">
-          <span class="staff-target-info__icon">🎯</span>
+          <span class="staff-target-info__icon">!</span>
           <span class="staff-target-info__label">Должно быть в наличии:</span>
           <span class="staff-target-info__value" id="staffTargetValue">— шт</span>
         </div>
@@ -743,7 +779,7 @@
 
       <!-- ===== ОСТАТКИ (фактически) ===== -->
       <div class="branches-qty-section">
-        <h3 class="branches-qty-title" id="branchesQtyTitle">📦 Остаток (фактически, шт)</h3>
+        <h3 class="branches-qty-title" id="branchesQtyTitle">Остаток (фактически, шт)</h3>
         <div class="branches-qty-grid" id="branchesQtyGrid">
           <div class="branch-qty-item" data-branch="branch1">
             <label>Сибирский филиал</label>
@@ -778,7 +814,7 @@
       <!-- ===== ПРОШЛОЕ ДОКАЗАТЕЛЬСТВО (последний отчёт сотрудника) ===== -->
       <div class="last-proof-info" id="lastProofInfo" style="display:none">
         <div class="last-proof-info__title">
-          <span>📸</span>
+          
           <span>Последний отчёт от сотрудника</span>
         </div>
         <div class="last-proof-info__body" id="lastProofBody"></div>
@@ -814,16 +850,16 @@
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
-      <h2 class="modal__heading">📸 Доказать остаток</h2>
+      <h2 class="modal__heading">Подтвердить остаток</h2>
 
       <div class="proof-info">
         <div class="proof-info__name" id="proofProductName"></div>
         <div class="proof-info__row" id="proofTargetRow">
-          <span class="proof-info__label">🎯 Должно быть:</span>
+          <span class="proof-info__label">Должно быть:</span>
           <span class="proof-info__value" id="proofTargetValue">— шт</span>
         </div>
         <div class="proof-info__row">
-          <span class="proof-info__label">📦 Сейчас в системе:</span>
+          <span class="proof-info__label">Сейчас в системе:</span>
           <span class="proof-info__value" id="proofCurrentValue">— шт</span>
         </div>
       </div>
@@ -863,7 +899,7 @@
 
       <!-- Поле остатка -->
       <div class="branches-qty-section">
-        <h3 class="branches-qty-title">📦 Введите фактический остаток (шт)</h3>
+        <h3 class="branches-qty-title">Введите фактический остаток (шт)</h3>
         <div class="branches-qty-grid">
           <div class="branch-qty-item">
             <div class="qty-stepper qty-stepper--big">
@@ -940,14 +976,14 @@
       <div class="photo-choice-sheet__handle"></div>
       <div class="photo-choice-sheet__title">Откуда взять фото?</div>
       <button class="photo-choice-sheet__btn" id="photoChoiceCamera">
-        <span class="photo-choice-sheet__icon">📷</span>
+        <span class="photo-choice-sheet__icon">●</span>
         <span class="photo-choice-sheet__text">
           <span class="photo-choice-sheet__label">Сделать фото</span>
           <span class="photo-choice-sheet__sub">Открыть камеру</span>
         </span>
       </button>
       <button class="photo-choice-sheet__btn" id="photoChoiceGallery">
-        <span class="photo-choice-sheet__icon">🖼️</span>
+        <span class="photo-choice-sheet__icon">▤</span>
         <span class="photo-choice-sheet__text">
           <span class="photo-choice-sheet__label">Выбрать из галереи</span>
           <span class="photo-choice-sheet__sub">Готовое фото из памяти телефона</span>
@@ -982,7 +1018,6 @@
         <tr id="printTableHead">
           <th style="width:60px">Фото</th>
           <th>Товар</th>
-          <th>Категория</th>
           <th>Сибирский</th>
           <th>Фреско</th>
           <th>Гелион</th>
