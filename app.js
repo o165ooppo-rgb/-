@@ -31,6 +31,7 @@ const PRODUCTS_REF = ref(db, 'products');
 const ACCOUNTS_REF = ref(db, 'accounts');
 const LOGS_REF     = ref(db, 'logs');
 const PROOFS_REF   = ref(db, 'proofs'); // отчёты сотрудников с фото-доказательствами
+const CATEGORIES_REF = ref(db, 'categories'); // динамические категории, управляемые менеджером
 
 /* ===========================================================
    КОНСТАНТЫ
@@ -40,21 +41,33 @@ const SESSION_KEY    = 'mone_session_v2';
 const ACCOUNTS_CACHE = 'mone_accounts_v2';
 const LOGS_CACHE     = 'mone_logs_v2';
 const PROOFS_CACHE   = 'mone_proofs_v2';
+const CATEGORIES_CACHE = 'mone_categories_v2';
 
-const CATEGORY_LABELS = {
-  drinks:     'Напитки',
-  disposable: 'Одноразовая посуда',
-  food:       'Продукты',
-  cleaning:   'Чистящие средства',
-  other:      'Прочее',
-};
-const CATEGORY_EMOJI = {
-  drinks:     '🥤',
-  disposable: '🍴',
-  food:       '🍞',
-  cleaning:   '🧴',
-  other:      '📦',
-};
+/* Дефолтные категории — используются как fallback, если БД пуста.
+   В UI отображаются БЕЗ эмодзи (серьёзный стиль). */
+const DEFAULT_CATEGORIES = [
+  { id: 'drinks',     label: 'Напитки',              order: 1 },
+  { id: 'disposable', label: 'Одноразовая посуда',   order: 2 },
+  { id: 'cleaning',   label: 'Чистящие средства',    order: 3 },
+  { id: 'other',      label: 'Прочее',               order: 99 },
+];
+
+/* Геттер: подпись категории по id */
+function getCategoryLabel(catId) {
+  if (!catId) return 'Прочее';
+  const found = state.categories.find(c => c.id === catId);
+  if (found) return found.label;
+  // fallback на дефолты
+  const def = DEFAULT_CATEGORIES.find(c => c.id === catId);
+  return def ? def.label : (catId === 'other' ? 'Прочее' : catId);
+}
+
+/* Сортированный список категорий */
+function getCategoriesSorted() {
+  const list = state.categories.length ? state.categories : DEFAULT_CATEGORIES;
+  return [...list].sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
 
 const BRANCH_LABELS = { branch1: 'Сибирский', branch2: 'Фреско', branch3: 'Гелион' };
 const BRANCH_FULL_LABELS = { branch1: 'Сибирский филиал', branch2: 'Фреско филиал', branch3: 'Гелион филиал' };
@@ -62,16 +75,16 @@ const BRANCH_KEYS   = ['branch1', 'branch2', 'branch3'];
 const ROLE_LABELS   = { manager: 'Менеджер', staff: 'Сотрудник филиала' };
 
 const LOG_TYPES = {
-  login:       { icon: '🔑', label: 'Вход в систему' },
-  logout:      { icon: '🚪', label: 'Выход из системы' },
-  add:         { icon: '➕', label: 'Добавление товара' },
-  edit:        { icon: '✏️', label: 'Редактирование товара' },
-  delete:      { icon: '🗑️', label: 'Удаление товара' },
-  qtyEdit:     { icon: '🔢', label: 'Изменение количества' },
-  photoEdit:   { icon: '📷', label: 'Изменение фото' },
-  userEdit:    { icon: '👤', label: 'Изменение аккаунта' },
-  targetEdit:  { icon: '🎯', label: 'Изменение нормы' },
-  proofSubmit: { icon: '📸', label: 'Отчёт-доказательство' },
+  login:       { icon: 'LOGIN',  label: 'Вход в систему' },
+  logout:      { icon: 'LOGOUT', label: 'Выход из системы' },
+  add:         { icon: 'ADD',    label: 'Добавление товара' },
+  edit:        { icon: 'EDIT',   label: 'Редактирование товара' },
+  delete:      { icon: 'DEL',    label: 'Удаление товара' },
+  qtyEdit:     { icon: 'QTY',    label: 'Изменение количества' },
+  photoEdit:   { icon: 'PHOTO',  label: 'Изменение фото' },
+  userEdit:    { icon: 'USER',   label: 'Изменение аккаунта' },
+  targetEdit:  { icon: 'TGT',    label: 'Изменение нормы' },
+  proofSubmit: { icon: 'RPT',    label: 'Отчёт-доказательство' },
 };
 
 let renderToken = 0;
@@ -125,13 +138,14 @@ function getDefaultAccounts() {
 }
 
 function getDefaultProducts() {
+  const now = Date.now();
   return [
-    { id: uid(), name: 'Вилки металлические', category: 'disposable', description: '', photo: null, branches: { branch1: 19, branch2: 22, branch3: 18 }, targets: { branch1: 22, branch2: 22, branch3: 22 } },
-    { id: uid(), name: 'Ложки металлические', category: 'disposable', description: '', photo: null, branches: { branch1: 22, branch2: 20, branch3: 22 }, targets: { branch1: 22, branch2: 22, branch3: 22 } },
-    { id: uid(), name: 'Pepsi 0.5л',          category: 'drinks',     description: '', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  }, targets: { branch1: 30, branch2: 30, branch3: 30 } },
-    { id: uid(), name: 'Coca-Cola 1л',        category: 'drinks',     description: '', photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 }, targets: { branch1: 20, branch2: 20, branch3: 20 } },
-    { id: uid(), name: 'Сахар',               category: 'food',       description: '', photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  }, targets: { branch1: 15, branch2: 15, branch3: 15 } },
-    { id: uid(), name: 'Fairy 500мл',         category: 'cleaning',   description: '', photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  }, targets: { branch1: 6,  branch2: 6,  branch3: 6  } },
+    { id: uid(), name: 'Вилки металлические', category: 'disposable', description: '', photo: null, branches: { branch1: 19, branch2: 22, branch3: 18 }, targets: { branch1: 22, branch2: 22, branch3: 22 }, createdAt: now + 1 },
+    { id: uid(), name: 'Ложки металлические', category: 'disposable', description: '', photo: null, branches: { branch1: 22, branch2: 20, branch3: 22 }, targets: { branch1: 22, branch2: 22, branch3: 22 }, createdAt: now + 2 },
+    { id: uid(), name: 'Pepsi 0.5л',          category: 'drinks',     description: '', photo: null, branches: { branch1: 24, branch2: 8,  branch3: 3  }, targets: { branch1: 30, branch2: 30, branch3: 30 }, createdAt: now + 3 },
+    { id: uid(), name: 'Coca-Cola 1л',        category: 'drinks',     description: '', photo: null, branches: { branch1: 12, branch2: 20, branch3: 15 }, targets: { branch1: 20, branch2: 20, branch3: 20 }, createdAt: now + 4 },
+    { id: uid(), name: 'Сахар',               category: 'other',      description: '', photo: null, branches: { branch1: 10, branch2: 6,  branch3: 4  }, targets: { branch1: 15, branch2: 15, branch3: 15 }, createdAt: now + 5 },
+    { id: uid(), name: 'Fairy 500мл',         category: 'cleaning',   description: '', photo: null, branches: { branch1: 4,  branch2: 4,  branch3: 2  }, targets: { branch1: 6,  branch2: 6,  branch3: 6  }, createdAt: now + 6 },
   ];
 }
 
@@ -143,11 +157,15 @@ const state = {
   accounts:         [],
   logs:             [],
   proofs:           [],
+  categories:       [],   // динамические категории {id, label, order}
   activeBranch:     'all',
   stockFilter:      'all',
-  sortMode:         'smart',
+  categoryFilter:   'all',
+  searchQuery:      '',
+  sortMode:         'manual',
   pendingDeleteId:  null,
   pendingDeleteAccountId: null,
+  pendingDeleteCategoryId: null,
   editingProductId: null,
   editingUserId:    null,
   proofProductId:   null,
@@ -272,12 +290,12 @@ function getDateGroupKey(ts) {
 
 // Человеко-читаемое название группы
 function formatDateGroupLabel(key) {
-  if (key === 'today')     return '📅 Сегодня';
-  if (key === 'yesterday') return '📅 Вчера';
+  if (key === 'today')     return 'Сегодня';
+  if (key === 'yesterday') return 'Вчера';
   // YYYY-MM-DD → красивая русская дата
   const [y, m, d] = key.split('-');
   const dt = new Date(+y, +m - 1, +d);
-  return '📅 ' + dt.toLocaleDateString('ru-RU', {
+  return dt.toLocaleDateString('ru-RU', {
     day: 'numeric', month: 'long', year: 'numeric',
   });
 }
@@ -317,16 +335,28 @@ function bootstrapProductsIfMissing() {
   });
 }
 
+/* Если в БД нет ни одной категории — заливаем дефолтный набор. */
+function bootstrapCategoriesIfMissing() {
+  return get(CATEGORIES_REF).then(snap => {
+    if (snap.exists() && snap.val() && Object.keys(snap.val()).length > 0) return;
+    const updates = {};
+    DEFAULT_CATEGORIES.forEach(c => { updates[c.id] = c; });
+    return set(CATEGORIES_REF, updates);
+  }).catch(() => {});
+}
+
 function initFirebaseListeners() {
   showSyncIndicator('connecting');
 
   onValue(PRODUCTS_REF, (snap) => {
     const data = snap.val();
     state.products = data ? Object.values(data) : [];
-    // Миграция: добавляем targets и category для старых товаров
-    state.products.forEach(p => {
-      if (!p.targets)  p.targets  = { branch1: 0, branch2: 0, branch3: 0 };
-      if (!p.category) p.category = 'other';
+    // Миграция: добавляем targets, category и createdAt для старых товаров
+    let baseTs = Date.now() - state.products.length * 1000;
+    state.products.forEach((p, idx) => {
+      if (!p.targets)   p.targets   = { branch1: 0, branch2: 0, branch3: 0 };
+      if (!p.category)  p.category  = 'other';
+      if (!p.createdAt) p.createdAt = baseTs + idx * 1000; // стабильный порядок для старых
     });
     saveLocal(STORAGE_KEY, state.products);
     state.firebaseLoaded = true;
@@ -342,15 +372,17 @@ function initFirebaseListeners() {
     console.error('[products]', err);
     if (!state.firebaseLoaded) {
       state.products = loadLocal(STORAGE_KEY) || [];
-      state.products.forEach(p => {
-        if (!p.targets)  p.targets  = { branch1: 0, branch2: 0, branch3: 0 };
-        if (!p.category) p.category = 'other';
+      let baseTs = Date.now() - state.products.length * 1000;
+      state.products.forEach((p, idx) => {
+        if (!p.targets)   p.targets   = { branch1: 0, branch2: 0, branch3: 0 };
+        if (!p.category)  p.category  = 'other';
+        if (!p.createdAt) p.createdAt = baseTs + idx * 1000;
       });
       state.firebaseLoaded = true;
       renderAll();
     }
     showSyncIndicator('error');
-    showToast('⚠ Нет связи — работаем офлайн', 'error');
+    showToast('Нет связи — работаем офлайн', 'error');
   });
 
   onValue(ACCOUNTS_REF, (snap) => {
@@ -390,6 +422,20 @@ function initFirebaseListeners() {
     if (state.currentPage === 'gallery') renderGalleryPage();
     if (state.currentPage === 'reports') renderReportsPage();
     renderAll();
+  });
+
+  // Категории — слушают все пользователи (нужны для отображения и фильтров)
+  onValue(CATEGORIES_REF, (snap) => {
+    const data = snap.val();
+    state.categories = data ? Object.values(data) : [];
+    if (!state.categories.length) state.categories = [...DEFAULT_CATEGORIES];
+    saveLocal(CATEGORIES_CACHE, state.categories);
+    refreshCategoryDropdowns();
+    if (state.currentPage === 'products') renderAll();
+    if (state.currentPage === 'reports')  renderReportsPage();
+  }, () => {
+    state.categories = loadLocal(CATEGORIES_CACHE) || [...DEFAULT_CATEGORIES];
+    refreshCategoryDropdowns();
   });
 }
 
@@ -440,15 +486,15 @@ function forceLogout(message) {
 =========================================================== */
 async function fbSaveProduct(product) {
   try { await set(ref(db, `products/${product.id}`), product); }
-  catch (e) { console.error('Save product error:', e); showToast('⚠ Ошибка синхронизации', 'error'); }
+  catch (e) { console.error('Save product error:', e); showToast('Ошибка синхронизации', 'error'); }
 }
 async function fbDeleteProduct(id) {
   try { await remove(ref(db, `products/${id}`)); }
-  catch (e) { console.error('Delete product error:', e); showToast('⚠ Ошибка удаления', 'error'); }
+  catch (e) { console.error('Delete product error:', e); showToast('Ошибка удаления', 'error'); }
 }
 async function fbUpdateAccount(id, patch) {
   try { await update(ref(db, `accounts/${id}`), patch); }
-  catch (e) { console.error('Update account error:', e); showToast('⚠ Ошибка сохранения', 'error'); }
+  catch (e) { console.error('Update account error:', e); showToast('Ошибка сохранения', 'error'); }
 }
 async function fbClearLogs() {
   try { await remove(LOGS_REF); }
@@ -462,7 +508,7 @@ async function fbAddProof(entry) {
 
 async function fbDeleteAccount(id) {
   try { await remove(ref(db, `accounts/${id}`)); }
-  catch (e) { console.error('Delete account error:', e); showToast('⚠ Ошибка удаления аккаунта', 'error'); }
+  catch (e) { console.error('Delete account error:', e); showToast('Ошибка удаления аккаунта', 'error'); }
 }
 
 async function writeLog(type, details = '', extra = {}) {
@@ -493,8 +539,8 @@ function showSyncIndicator(status) {
   const el = $('syncIndicator');
   const map = {
     connecting: { text: '⏳ Подключение...',  cls: 'sync--connecting' },
-    ok:         { text: '☁ Синхронизировано', cls: 'sync--ok'         },
-    error:      { text: '⚠ Офлайн',           cls: 'sync--error'      },
+    ok:         { text: 'Синхронизировано', cls: 'sync--ok'         },
+    error:      { text: 'Офлайн',           cls: 'sync--error'      },
   };
   const s = map[status] || map.ok;
   if (el) { el.textContent = s.text; el.className = `sync-indicator ${s.cls}`; }
@@ -551,6 +597,7 @@ function initAuth() {
 
   bootstrapAccountsIfMissing().catch(() => {});
   bootstrapProductsIfMissing().catch(() => {});
+  bootstrapCategoriesIfMissing().catch(() => {});
 }
 
 async function handleLogin() {
@@ -597,7 +644,7 @@ async function handleLogin() {
   errEl.textContent = '';
   enterApp(false);
   await writeLog('login', `${ROLE_LABELS[acc.role]}: ${acc.username}`);
-  showToast(`👋 Добро пожаловать, ${acc.name}!`, 'success');
+  showToast(`Добро пожаловать, ${acc.name}!`, 'success');
 }
 
 function showLoginError(message) {
@@ -667,7 +714,7 @@ async function handleLogout() {
   $('loginUsername').value = '';
   $('loginPassword').value = '';
   $('loginError').textContent = '';
-  showToast('👋 Вы вышли из системы');
+  showToast('Вы вышли из системы');
   setTimeout(() => $('loginUsername').focus(), 200);
 }
 
@@ -820,8 +867,8 @@ function updateBranchModalStats() {
     const lowCnt = state.products.filter(p => { const q = p.branches?.[k] ?? 0; return q > 0 && q <= 5; }).length;
     const outCnt = state.products.filter(p => (p.branches?.[k] ?? 0) === 0).length;
     let extra = '';
-    if (outCnt > 0)      extra = ` • ⚠ ${outCnt} нет`;
-    else if (lowCnt > 0) extra = ` • ⚠ ${lowCnt} мало`;
+    if (outCnt > 0)      extra = ` • ${outCnt} нет`;
+    else if (lowCnt > 0) extra = ` • ${lowCnt} мало`;
     el.textContent = `${items} шт${extra}`;
   });
 }
@@ -872,7 +919,7 @@ function initManagerPanel() {
     await fbClearLogs();
     state.logs = [];
     renderManagerLogs();
-    showToast('✓ Журнал очищен');
+    showToast('Журнал очищен');
   });
 
   $('userEditClose').addEventListener('click', () => closeOverlay($('userEditModal')));
@@ -891,8 +938,8 @@ function initManagerPanel() {
     if (!accId) return;
     const acc = state.accounts.find(a => a.id === accId);
     if (!acc) return;
-    if (acc.role === 'manager') { showToast('⛔ Нельзя удалить аккаунт менеджера', 'error'); return; }
-    if (acc.id === state.currentUser.id) { showToast('⛔ Нельзя удалить собственный аккаунт', 'error'); return; }
+    if (acc.role === 'manager') { showToast('Нельзя удалить аккаунт менеджера', 'error'); return; }
+    if (acc.id === state.currentUser.id) { showToast('Нельзя удалить собственный аккаунт', 'error'); return; }
     state.pendingDeleteAccountId = accId;
     $('accountDeleteText').textContent =
       `Аккаунт «${acc.name}» (логин: ${acc.username}) будет удалён. ` +
@@ -920,7 +967,7 @@ function initManagerPanel() {
     if (!acc) return;
     await fbDeleteAccount(accId);
     await writeLog('userEdit', `Удалён аккаунт: ${acc.name} (@${acc.username})`);
-    showToast(`✓ Аккаунт «${acc.name}» удалён`);
+    showToast(`Аккаунт «${acc.name}» удалён`);
     // У удалённого пользователя через onValue(ACCOUNTS_REF) сработает
     // revalidateCurrentSession → forceLogout. Заново войти не сможет, пока
     // менеджер не создаст новый аккаунт.
@@ -972,7 +1019,7 @@ function renderManagerUsers() {
           <div class="manager-user-meta">
             <span class="user-meta-login">@${escHtml(acc.username)}</span>
             <span class="manager-user-role role-badge-${isMgr ? 'manager' : 'staff'}">
-              ${isMgr ? '👑 Менеджер' : '🏪 ' + BRANCH_LABELS[acc.branch]}
+              ${isMgr ? 'Менеджер' : BRANCH_LABELS[acc.branch]}
             </span>
           </div>
         </div>
@@ -1050,7 +1097,7 @@ async function handleUserEditSubmit() {
   await writeLog('userEdit', `${acc.name} → ${name}${credentialsChanged ? ' (логин/пароль обновлены)' : ''}`);
 
   closeOverlay($('userEditModal'));
-  showToast(credentialsChanged ? '✓ Сохранено. Старая сессия закрыта.' : '✓ Сохранено');
+  showToast(credentialsChanged ? 'Сохранено. Старая сессия закрыта.' : 'Сохранено');
 
   if (accId === state.currentUser.id && credentialsChanged) {
     const newSession = {
@@ -1070,12 +1117,12 @@ function renderManagerLogs() {
   if (!list) return;
 
   if (!state.logs.length) {
-    list.innerHTML = '<div class="log-empty">📭 Журнал пуст</div>';
+    list.innerHTML = '<div class="log-empty">Журнал пуст</div>';
     return;
   }
 
   list.innerHTML = state.logs.slice(0, 200).map(log => {
-    const info = LOG_TYPES[log.type] || { icon: '📌', label: log.type };
+    const info = LOG_TYPES[log.type] || { icon: '?', label: log.type };
     const cssClass = ['add','edit','delete','login','logout','qtyEdit','photoEdit','userEdit','targetEdit','proofSubmit'].includes(log.type)
       ? 'log-' + log.type.toLowerCase()
       : 'log-other';
@@ -1091,6 +1138,179 @@ function renderManagerLogs() {
         <div class="log-entry__action">${escHtml(info.label)}${log.details ? ' — ' + escHtml(log.details) : ''}</div>
       </div>`;
   }).join('');
+}
+
+/* ===========================================================
+   КАТЕГОРИИ — управление (CRUD)
+   Менеджер может добавлять, переименовывать, удалять.
+=========================================================== */
+
+/* Обновляем все выпадающие списки и фильтры категорий */
+function refreshCategoryDropdowns() {
+  const cats = getCategoriesSorted();
+
+  // Выпадающий список в фильтре
+  const filterSel = $('filterCategorySelect');
+  if (filterSel) {
+    const current = state.categoryFilter || filterSel.value || 'all';
+    filterSel.innerHTML =
+      '<option value="all">Все категории</option>' +
+      cats.map(c => `<option value="${escHtml(c.id)}">${escHtml(c.label)}</option>`).join('');
+    filterSel.value = current;
+  }
+
+  // Выпадающий список в форме редактирования товара
+  const editSel = $('editCategory');
+  if (editSel) {
+    const current = editSel.value || 'other';
+    editSel.innerHTML = cats.map(c =>
+      `<option value="${escHtml(c.id)}">${escHtml(c.label)}</option>`
+    ).join('');
+    editSel.value = cats.find(c => c.id === current) ? current : (cats[0]?.id || 'other');
+  }
+
+  // Фильтр категорий на странице отчётов
+  const reportsCatBox = $('reportsCategoryFilters');
+  if (reportsCatBox) {
+    const active = state.reportsCategoryFilter || 'all';
+    reportsCatBox.innerHTML =
+      `<button class="reports-filter-btn ${active === 'all' ? 'active' : ''}" data-cfilter="all">Все</button>` +
+      cats.map(c =>
+        `<button class="reports-filter-btn ${active === c.id ? 'active' : ''}" data-cfilter="${escHtml(c.id)}">${escHtml(c.label)}</button>`
+      ).join('');
+    // Заново навешиваем обработчики
+    reportsCatBox.querySelectorAll('.reports-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        reportsCatBox.querySelectorAll('.reports-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.reportsCategoryFilter = btn.dataset.cfilter;
+        renderReportsPage();
+      });
+    });
+  }
+}
+
+function openCategoriesModal() {
+  if (!isManager()) return;
+  renderCategoriesList();
+  $('newCategoryName').value = '';
+  $('catError').textContent = '';
+  openOverlay($('categoriesModal'));
+  setTimeout(() => $('newCategoryName').focus(), 200);
+}
+
+function renderCategoriesList() {
+  const box = $('categoriesList');
+  if (!box) return;
+  const cats = getCategoriesSorted();
+  if (!cats.length) {
+    box.innerHTML = '<div class="log-empty">Нет категорий</div>';
+    return;
+  }
+  box.innerHTML = cats.map(c => {
+    const usageCount = state.products.filter(p => (p.category || 'other') === c.id).length;
+    return `
+      <div class="category-row" data-cid="${escHtml(c.id)}">
+        <input class="category-row__input" type="text" value="${escHtml(c.label)}" data-cid="${escHtml(c.id)}"/>
+        <span class="category-row__count" title="Используется в товарах">${usageCount}</span>
+        <button class="category-row__del" data-cid="${escHtml(c.id)}" title="Удалить">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/>
+          </svg>
+        </button>
+      </div>`;
+  }).join('');
+
+  // Сохранение при изменении подписи
+  box.querySelectorAll('.category-row__input').forEach(inp => {
+    inp.addEventListener('blur', async () => {
+      const id = inp.dataset.cid;
+      const label = inp.value.trim();
+      if (!label) {
+        inp.value = getCategoryLabel(id);
+        return;
+      }
+      const cat = state.categories.find(c => c.id === id);
+      if (!cat || cat.label === label) return;
+      await fbUpdateCategory(id, { label });
+      await writeLog('userEdit', `Категория переименована: ${cat.label} → ${label}`);
+      showToast('Сохранено', 'success');
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    });
+  });
+
+  // Удаление
+  box.querySelectorAll('.category-row__del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.cid;
+      const cat = state.categories.find(c => c.id === id);
+      if (!cat) return;
+      const usage = state.products.filter(p => (p.category || 'other') === id).length;
+      if (usage > 0) {
+        if (!confirm(`Категория "${cat.label}" используется в ${usage} товар(ах). Удалить? Товары перейдут в "Прочее".`)) return;
+      } else {
+        if (!confirm(`Удалить категорию "${cat.label}"?`)) return;
+      }
+      deleteCategoryAndReassign(id);
+    });
+  });
+}
+
+async function addCategory() {
+  if (!isManager()) return;
+  const name = $('newCategoryName').value.trim();
+  if (!name) {
+    $('catError').textContent = 'Введите название категории';
+    return;
+  }
+  if (name.length > 40) {
+    $('catError').textContent = 'Слишком длинное название (макс. 40 символов)';
+    return;
+  }
+  // Проверка уникальности
+  const dup = state.categories.find(c => c.label.toLowerCase() === name.toLowerCase());
+  if (dup) {
+    $('catError').textContent = 'Такая категория уже существует';
+    return;
+  }
+  const newId = 'cat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+  const maxOrder = Math.max(0, ...state.categories.map(c => c.order || 0));
+  const newCat = { id: newId, label: name, order: maxOrder + 1 };
+  await fbSaveCategory(newCat);
+  await writeLog('userEdit', `Добавлена категория: ${name}`);
+  $('newCategoryName').value = '';
+  $('catError').textContent = '';
+  showToast('Категория добавлена', 'success');
+  // renderCategoriesList сработает автоматически после обновления state.categories через onValue
+}
+
+async function deleteCategoryAndReassign(catId) {
+  if (!isManager()) return;
+  // Переназначаем все товары этой категории на 'other'
+  const affected = state.products.filter(p => (p.category || 'other') === catId);
+  for (const p of affected) {
+    p.category = 'other';
+    await fbSaveProduct(p);
+  }
+  await fbDeleteCategory(catId);
+  await writeLog('userEdit', `Удалена категория (${affected.length} товаров → Прочее)`);
+  showToast('Категория удалена', 'success');
+}
+
+async function fbSaveCategory(cat) {
+  try { await set(ref(db, `categories/${cat.id}`), cat); }
+  catch (e) { console.error('Save category error:', e); showToast('Ошибка сохранения', 'error'); }
+}
+async function fbUpdateCategory(id, patch) {
+  try { await update(ref(db, `categories/${id}`), patch); }
+  catch (e) { console.error('Update category error:', e); }
+}
+async function fbDeleteCategory(id) {
+  try { await remove(ref(db, `categories/${id}`)); }
+  catch (e) { console.error('Delete category error:', e); }
 }
 
 /* ===========================================================
@@ -1112,24 +1332,32 @@ function getFilteredProducts() {
   let list = [...state.products];
   const branch = state.activeBranch;
 
+  // Поиск по названию
+  if (state.searchQuery && state.searchQuery.trim()) {
+    const q = state.searchQuery.trim().toLowerCase();
+    list = list.filter(p => (p.name || '').toLowerCase().includes(q));
+  }
+
+  // Фильтр по категории
+  if (state.categoryFilter && state.categoryFilter !== 'all') {
+    list = list.filter(p => (p.category || 'other') === state.categoryFilter);
+  }
+
+  // Фильтр по остатку
   if (state.stockFilter !== 'all') {
     list = list.filter(p => getStockStatus(getQty(p, branch)) === state.stockFilter);
   }
 
+  // Сортировка. 'manual' = сохраняем порядок добавления (по createdAt),
+  // т.е. товары НЕ перепрыгивают при изменении количества.
   switch (state.sortMode) {
-    case 'smart':
-      list.sort((a, b) => {
-        const qa = getQty(a, branch);
-        const qb = getQty(b, branch);
-        const pr = q => q === 0 ? 0 : q <= 5 ? 1 : 2;
-        const pa = pr(qa), pb = pr(qb);
-        if (pa !== pb) return pa - pb;
-        return qa - qb;
-      });
-      break;
     case 'name':     list.sort((a, b) => a.name.localeCompare(b.name, 'ru')); break;
     case 'qty-asc':  list.sort((a, b) => getQty(a, branch) - getQty(b, branch)); break;
     case 'qty-desc': list.sort((a, b) => getQty(b, branch) - getQty(a, branch)); break;
+    case 'manual':
+    default:
+      list.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      break;
   }
 
   return list;
@@ -1148,6 +1376,32 @@ function initFilterModal() {
   $('filterModalClose').addEventListener('click', () => closeOverlay(modal));
   modal.addEventListener('click', e => { if (e.target === modal) closeOverlay(modal); });
 
+  // Поиск
+  const searchInp = $('filterSearchInput');
+  const searchClear = $('filterSearchClear');
+  let searchTimer = null;
+  if (searchInp) {
+    searchInp.addEventListener('input', () => {
+      const v = searchInp.value;
+      searchClear.style.display = v ? 'flex' : 'none';
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        state.searchQuery = v;
+        updateFilterBadge();
+        renderAll();
+      }, 200);
+    });
+    searchClear.addEventListener('click', () => {
+      searchInp.value = '';
+      searchClear.style.display = 'none';
+      state.searchQuery = '';
+      updateFilterBadge();
+      renderAll();
+      searchInp.focus();
+    });
+  }
+
+  // Чипы статуса остатков
   modal.querySelectorAll('.filter-stock').forEach(chip => {
     chip.addEventListener('click', () => {
       modal.querySelectorAll('.filter-stock').forEach(c => c.classList.remove('active'));
@@ -1158,6 +1412,20 @@ function initFilterModal() {
     });
   });
 
+  // Категории
+  $('filterCategorySelect').addEventListener('change', () => {
+    state.categoryFilter = $('filterCategorySelect').value;
+    updateFilterBadge();
+    renderAll();
+  });
+
+  // Кнопка «Управлять» категориями — только менеджер
+  $('filterManageCatsBtn').addEventListener('click', () => {
+    closeOverlay(modal);
+    setTimeout(openCategoriesModal, 200);
+  });
+
+  // Сортировка
   $('filterSortSelect').addEventListener('change', () => {
     state.sortMode = $('filterSortSelect').value;
     updateFilterBadge();
@@ -1166,19 +1434,33 @@ function initFilterModal() {
 
   $('filterResetBtn').addEventListener('click', () => {
     state.stockFilter = 'all';
-    state.sortMode    = 'smart';
-    $('filterSortSelect').value = 'smart';
+    state.categoryFilter = 'all';
+    state.searchQuery = '';
+    state.sortMode    = 'manual';
+    if (searchInp) searchInp.value = '';
+    if (searchClear) searchClear.style.display = 'none';
+    $('filterSortSelect').value = 'manual';
+    $('filterCategorySelect').value = 'all';
     modal.querySelectorAll('.filter-stock').forEach(c => c.classList.remove('active'));
     modal.querySelector('.filter-stock[data-stock="all"]').classList.add('active');
     updateFilterBadge();
     refreshFilterModalCounts();
     renderAll();
-    showToast('✓ Фильтры сброшены');
+    showToast('Фильтры сброшены');
   });
 
   $('filterApplyBtn').addEventListener('click', () => {
     closeOverlay(modal);
-    showToast('✓ Фильтры применены');
+  });
+
+  // Модалка категорий
+  $('categoriesModalClose').addEventListener('click', () => closeOverlay($('categoriesModal')));
+  $('categoriesModal').addEventListener('click', e => {
+    if (e.target === $('categoriesModal')) closeOverlay($('categoriesModal'));
+  });
+  $('addCategoryBtn').addEventListener('click', addCategory);
+  $('newCategoryName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addCategory(); }
   });
 }
 
@@ -1187,18 +1469,33 @@ function openFilterModal() {
     c.classList.toggle('active', c.dataset.stock === state.stockFilter);
   });
   $('filterSortSelect').value = state.sortMode;
+  $('filterCategorySelect').value = state.categoryFilter;
+  $('filterSearchInput').value = state.searchQuery || '';
+  $('filterSearchClear').style.display = state.searchQuery ? 'flex' : 'none';
+  // Кнопку «Управлять категориями» показываем только менеджеру
+  $('filterManageCatsBtn').style.display = isManager() ? '' : 'none';
   refreshFilterModalCounts();
   openOverlay($('filterModal'));
+  // фокус на поиск только если на десктопе — на мобильном не открываем клавиатуру сразу
+  if (window.matchMedia && !window.matchMedia('(max-width: 767px)').matches) {
+    setTimeout(() => $('filterSearchInput').focus(), 200);
+  }
 }
 
 function refreshFilterModalCounts() {
   const branch = state.activeBranch;
-  const base   = [...state.products];
+  // Считаем по текущим (но без stock filter — чтобы видеть распределение)
+  let base = [...state.products];
+  if (state.searchQuery && state.searchQuery.trim()) {
+    const q = state.searchQuery.trim().toLowerCase();
+    base = base.filter(p => (p.name || '').toLowerCase().includes(q));
+  }
+  if (state.categoryFilter && state.categoryFilter !== 'all') {
+    base = base.filter(p => (p.category || 'other') === state.categoryFilter);
+  }
   let all = base.length, ok = 0, low = 0, out = 0;
-  let totalQty = 0;
   base.forEach(p => {
     const q = getQty(p, branch);
-    totalQty += q;
     const s = getStockStatus(q);
     if      (s === 'ok')  ok++;
     else if (s === 'low') low++;
@@ -1211,52 +1508,16 @@ function refreshFilterModalCounts() {
   $('filterCountOut').textContent = out;
 
   const branchLabel = branch === 'all' ? 'Все филиалы' : BRANCH_LABELS[branch];
-  $('filterSubtitle').textContent     = `${branchLabel} • Сколько товаров осталось`;
-  $('filterSummaryTitle').textContent = `📊 Сводка${branch === 'all' && isManager() ? ' по филиалам' : ''}`;
-
-  const summaryEl = $('filterSummary');
-  if (isManager() && branch === 'all') {
-    summaryEl.innerHTML = `
-      <div class="summary-row summary-row--total">
-        <span>Общее количество</span>
-        <strong>${totalQty} шт</strong>
-      </div>
-      ${BRANCH_KEYS.map(k => {
-        const sum = base.reduce((s, p) => s + (p.branches?.[k] ?? 0), 0);
-        return `
-          <div class="summary-row">
-            <span>🏪 ${BRANCH_LABELS[k]}</span>
-            <strong>${sum} шт</strong>
-          </div>`;
-      }).join('')}
-    `;
-  } else {
-    summaryEl.innerHTML = `
-      <div class="summary-row summary-row--total">
-        <span>Общее количество</span>
-        <strong>${totalQty} шт</strong>
-      </div>
-      <div class="summary-row">
-        <span>✓ В наличии</span>
-        <strong>${ok}</strong>
-      </div>
-      <div class="summary-row">
-        <span>⚠ Мало запасов</span>
-        <strong>${low}</strong>
-      </div>
-      <div class="summary-row">
-        <span>❌ Нет в наличии</span>
-        <strong>${out}</strong>
-      </div>
-    `;
-  }
+  $('filterSubtitle').textContent = branchLabel;
 }
 
 function updateFilterBadge() {
   const badge = $('filterBadge');
   let count = 0;
-  if (state.stockFilter !== 'all')   count++;
-  if (state.sortMode    !== 'smart') count++;
+  if (state.stockFilter !== 'all')    count++;
+  if (state.categoryFilter !== 'all') count++;
+  if (state.searchQuery && state.searchQuery.trim()) count++;
+  if (state.sortMode    !== 'manual') count++;
   badge.textContent = count;
   badge.style.display = count > 0 ? 'inline-flex' : 'none';
 }
@@ -1301,26 +1562,19 @@ function renderAll() {
     });
   });
 
-  // Степпер на карточке: +/− мгновенно сохраняют новое значение
-  $('productsGrid').querySelectorAll('.product-card__stepper-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const id = btn.dataset.pid;
-      const action = btn.dataset.qa;
-      const input = document.querySelector(`[data-qty-input="${id}"]`);
-      if (!input) return;
-      let v = parseInt(input.value, 10) || 0;
-      v = action === 'plus' ? v + 1 : Math.max(0, v - 1);
-      input.value = v;
-      saveQtyInstant(id, v);
-    });
-  });
-
-  // Ввод числа вручную: e.stopPropagation на клик/фокус (чтобы карточка не «считала» это своим кликом),
-  // сохранение при blur (выход из поля) и при Enter.
+  // Поле количества на карточке сотрудника:
+  // — клик не пробрасывается на карточку
+  // — при фокусе значение выделяется (можно сразу вводить новое число поверх старого)
+  // — сохранение по blur или Enter
   $('productsGrid').querySelectorAll('[data-qty-input]').forEach(inp => {
     inp.addEventListener('click', e => e.stopPropagation());
-    inp.addEventListener('focus', e => e.stopPropagation());
+    inp.addEventListener('focus', e => {
+      e.stopPropagation();
+      // Автовыделение всего содержимого — стирать ничего не надо вручную
+      try { inp.select(); } catch (_) {}
+      // На некоторых мобильных setSelectionRange срабатывает надёжнее
+      try { inp.setSelectionRange(0, inp.value.length); } catch (_) {}
+    });
     inp.addEventListener('blur', () => {
       const id = inp.dataset.qtyInput;
       let v = Math.max(0, parseInt(inp.value, 10) || 0);
@@ -1381,7 +1635,7 @@ function buildCard(product, index) {
     const isMiss = qty < target;
     targetHtml = `
       <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
-        <span class="product-card__target-label">🎯 Должно быть</span>
+        <span class="product-card__target-label">Должно быть</span>
         <span class="product-card__target-value">${qty} / ${target}</span>
       </div>`;
   } else if (showAllBranches && getTarget(product) > 0) {
@@ -1390,7 +1644,7 @@ function buildCard(product, index) {
     const isMiss = totalQ < totalT;
     targetHtml = `
       <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
-        <span class="product-card__target-label">🎯 Норма (всего)</span>
+        <span class="product-card__target-label">Норма (всего)</span>
         <span class="product-card__target-value">${totalQ} / ${totalT}</span>
       </div>`;
   }
@@ -1408,14 +1662,21 @@ function buildCard(product, index) {
   }
 
   // Степпер внизу карточки (только для сотрудника)
-  // Тап на − или + → сразу сохраняет. Клик по числу → редактирование, потеря фокуса → сохранение.
+  // Только цифра по центру. Тап → калькулятор и автовыделение, чтобы сразу перепечатать.
   let stepperHtml = '';
   if (isStaff()) {
     stepperHtml = `
-      <div class="product-card__stepper" data-stepper-for="${product.id}">
-        <button class="product-card__stepper-btn" data-qa="minus" data-pid="${product.id}" aria-label="Уменьшить">−</button>
-        <input type="number" class="product-card__stepper-input" data-qty-input="${product.id}" value="${qty}" min="0" inputmode="numeric"/>
-        <button class="product-card__stepper-btn" data-qa="plus" data-pid="${product.id}" aria-label="Увеличить">+</button>
+      <div class="product-card__stepper product-card__stepper--simple" data-stepper-for="${product.id}">
+        <input
+          type="number"
+          class="product-card__stepper-input product-card__stepper-input--solo"
+          data-qty-input="${product.id}"
+          value="${qty}"
+          min="0"
+          inputmode="numeric"
+          aria-label="Количество (шт)"
+        />
+        <span class="product-card__stepper-unit">шт</span>
       </div>`;
   }
 
@@ -1455,11 +1716,14 @@ function openEditModal(productId) {
   // Скрываем "последний отчёт" — у менеджера показываем только при редактировании
   $('lastProofInfo').style.display = 'none';
 
+  // Контекст: текущий активный филиал менеджера (может быть 'all')
+  const activeBranch = state.activeBranch;
+  const isAll = activeBranch === 'all';
+
   if (productId) {
     const p = state.products.find(pr => pr.id === productId);
     if (!p) return;
     $('editName').value     = p.name;
-    $('editDesc').value     = p.description || '';
     $('editCategory').value = p.category || 'other';
     $('qty1').value     = p.branches?.branch1 ?? 0;
     $('qty2').value     = p.branches?.branch2 ?? 0;
@@ -1480,7 +1744,7 @@ function openEditModal(productId) {
       const branchLabel = BRANCH_LABELS[lastProof.branch] || lastProof.branch;
       const photoHtml = lastProof.photo
         ? `<img src="${lastProof.photo}" alt=""/>`
-        : `<div style="width:100%;height:100%;display:grid;place-items:center;color:var(--text-muted)">📷</div>`;
+        : `<div style="width:100%;height:100%;display:grid;place-items:center;color:var(--text-muted)">—</div>`;
       $('lastProofBody').innerHTML = `
         <div class="last-proof-info__photo" data-proof-id="${escHtml(lastProof.id)}">${photoHtml}</div>
         <div class="last-proof-info__details">
@@ -1489,16 +1753,14 @@ function openEditModal(productId) {
           ${lastProof.comment ? `<div style="margin-top:4px;font-style:italic;">«${escHtml(lastProof.comment)}»</div>` : ''}
         </div>`;
       $('lastProofInfo').style.display = '';
-      // Клик на фото открывает lightbox
       const photoEl = $('lastProofBody').querySelector('.last-proof-info__photo');
-      if (photoEl) {
-        photoEl.addEventListener('click', () => openLightbox(lastProof));
-      }
+      if (photoEl) photoEl.addEventListener('click', () => openLightbox(lastProof));
     }
   } else {
     $('editName').value = '';
-    $('editDesc').value = '';
-    $('editCategory').value = 'other';
+    // Категория по умолчанию — первая из доступных, либо 'other'
+    const cats = getCategoriesSorted();
+    $('editCategory').value = cats[0]?.id || 'other';
     $('qty1').value = $('qty2').value = $('qty3').value = '0';
     $('target1').value = $('target2').value = $('target3').value = '0';
   }
@@ -1514,11 +1776,58 @@ function openEditModal(productId) {
   const delBtn = $('editDeleteBtn');
   if (delBtn) delBtn.style.display = productId ? '' : 'none';
 
-  // Все поля количества видны менеджеру
+  // ВЫБОР ФИЛИАЛА при добавлении нового товара:
+  // Если менеджер на конкретном филиале — товар добавляется именно туда (поле скрыто).
+  // Если на «Все филиалы» — показываем выбор.
+  const branchSelectWrap = $('editBranchSelectWrap');
+  if (!productId) {
+    // Создание нового товара
+    if (isAll) {
+      branchSelectWrap.style.display = '';
+      $('editBranchSelect').value = 'branch1';
+    } else {
+      branchSelectWrap.style.display = 'none';
+      $('editBranchSelect').value = activeBranch;
+    }
+  } else {
+    branchSelectWrap.style.display = 'none';
+  }
+
+  // ПОКАЗ ФИЛИАЛОВ В ФОРМЕ КОЛИЧЕСТВА:
+  // — При создании: показываем только выбранный филиал (или все, если 'all')
+  // — При редактировании существующего: показываем только активный филиал
+  //   (если 'all' — показываем все три)
+  const showAllBranchFields = isAll;
   document.querySelectorAll('#branchesQtyGrid .branch-qty-item').forEach(item => {
-    item.style.display = '';
+    if (showAllBranchFields) {
+      item.style.display = '';
+    } else {
+      item.style.display = (item.dataset.branch === activeBranch) ? '' : 'none';
+    }
   });
-  $('branchesQtyTitle').textContent = '📦 Остаток по филиалам (фактически, шт)';
+  document.querySelectorAll('#targetSection .branch-qty-item').forEach(item => {
+    if (showAllBranchFields) {
+      item.style.display = '';
+    } else {
+      item.style.display = (item.dataset.branch === activeBranch) ? '' : 'none';
+    }
+  });
+
+  // Заголовок блока остатков
+  if (showAllBranchFields) {
+    $('branchesQtyTitle').textContent = 'Остаток по филиалам (фактически, шт)';
+  } else {
+    $('branchesQtyTitle').textContent = `Остаток на филиале «${BRANCH_LABELS[activeBranch]}» (шт)`;
+  }
+  // Заголовок блока норм
+  const targetTitle = document.querySelector('#targetSection .branches-qty-title');
+  if (targetTitle) {
+    if (showAllBranchFields) {
+      targetTitle.textContent = 'Должно быть (норма по филиалам, шт)';
+    } else {
+      targetTitle.textContent = `Норма для «${BRANCH_LABELS[activeBranch]}» (шт)`;
+    }
+  }
 
   // Подсказки норма vs факт
   updateStockHints();
@@ -1529,6 +1838,33 @@ function openEditModal(productId) {
       el._hintListenerAttached = true;
     }
   });
+
+  // Обработчик переключения филиала при создании (показывает соответствующее поле количества)
+  const branchSel = $('editBranchSelect');
+  if (branchSel && !branchSel._listenerAttached) {
+    branchSel.addEventListener('change', () => {
+      if (state.editingProductId) return; // только при создании
+      const chosen = branchSel.value;
+      // Если мы в режиме «выбор филиала» (т.е. 'all') — переключаем видимость
+      if (state.activeBranch === 'all') {
+        document.querySelectorAll('#branchesQtyGrid .branch-qty-item, #targetSection .branch-qty-item').forEach(item => {
+          item.style.display = (item.dataset.branch === chosen) ? '' : 'none';
+        });
+        $('branchesQtyTitle').textContent = `Остаток на филиале «${BRANCH_LABELS[chosen]}» (шт)`;
+        if (targetTitle) targetTitle.textContent = `Норма для «${BRANCH_LABELS[chosen]}» (шт)`;
+      }
+    });
+    branchSel._listenerAttached = true;
+  }
+  // При создании с активным филиалом 'all' — сразу применяем фильтр видимости по выбранному branchSel
+  if (!productId && isAll) {
+    const chosen = branchSel.value;
+    document.querySelectorAll('#branchesQtyGrid .branch-qty-item, #targetSection .branch-qty-item').forEach(item => {
+      item.style.display = (item.dataset.branch === chosen) ? '' : 'none';
+    });
+    $('branchesQtyTitle').textContent = `Остаток на филиале «${BRANCH_LABELS[chosen]}» (шт)`;
+    if (targetTitle) targetTitle.textContent = `Норма для «${BRANCH_LABELS[chosen]}» (шт)`;
+  }
 
   openOverlay($('editModal'));
   setTimeout(() => $('editName').focus(), 200);
@@ -1549,10 +1885,10 @@ function updateStockHints() {
     }
     const diff = qty - target;
     if (diff < 0) {
-      hintEl.textContent = `⚠ норма: ${target} (не хватает ${Math.abs(diff)})`;
+      hintEl.textContent = `Норма: ${target} (не хватает ${Math.abs(diff)})`;
       hintEl.className = 'branch-qty-target-hint hint-low';
     } else {
-      hintEl.textContent = `✓ норма: ${target}`;
+      hintEl.textContent = `Норма: ${target}`;
       hintEl.className = 'branch-qty-target-hint hint-ok';
     }
   });
@@ -1561,11 +1897,13 @@ function updateStockHints() {
 async function saveProduct() {
   // Эта функция вызывается только менеджером (форма редактирования товара)
   if (!isManager()) {
-    showToast('⛔ Только менеджер может редактировать товары', 'error');
+    showToast('Только менеджер может редактировать товары', 'error');
     return;
   }
 
   const isEdit  = !!state.editingProductId;
+  const activeBranch = state.activeBranch;
+  const isAll = activeBranch === 'all';
 
   const name = $('editName').value.trim();
   if (!name) {
@@ -1578,22 +1916,67 @@ async function saveProduct() {
 
   const original = isEdit ? state.products.find(p => p.id === state.editingProductId) : null;
 
+  // ===== ПОСТРОЕНИЕ ВЕТОК ОСТАТКОВ И НОРМ =====
+  // При редактировании существующего товара с активным филиалом —
+  // меняем ТОЛЬКО этот филиал, остальные оставляем как были.
+  // При создании нового — товар идёт в выбранный филиал (остальные = 0).
+  // При активном «все филиалы» — меняются/задаются все три.
+
+  let branches = original ? { ...(original.branches || {}) } : { branch1: 0, branch2: 0, branch3: 0 };
+  let targets  = original ? { ...(original.targets  || {}) } : { branch1: 0, branch2: 0, branch3: 0 };
+  // На всякий случай гарантируем все три ключа
+  BRANCH_KEYS.forEach(k => {
+    if (typeof branches[k] !== 'number') branches[k] = 0;
+    if (typeof targets[k]  !== 'number') targets[k]  = 0;
+  });
+
+  if (!isEdit) {
+    // СОЗДАНИЕ нового товара
+    if (isAll) {
+      // Менеджер на «все филиалы» — выбирает один филиал через editBranchSelect
+      const chosen = $('editBranchSelect').value || 'branch1';
+      // Сбрасываем всё в 0, и заполняем только выбранный филиал
+      branches = { branch1: 0, branch2: 0, branch3: 0 };
+      targets  = { branch1: 0, branch2: 0, branch3: 0 };
+      const qtyId = 'qty' + (BRANCH_KEYS.indexOf(chosen) + 1);
+      const tgtId = 'target' + (BRANCH_KEYS.indexOf(chosen) + 1);
+      branches[chosen] = Math.max(0, parseInt($(qtyId).value, 10) || 0);
+      targets[chosen]  = Math.max(0, parseInt($(tgtId).value, 10) || 0);
+    } else {
+      // Активный конкретный филиал — туда и добавляем
+      branches = { branch1: 0, branch2: 0, branch3: 0 };
+      targets  = { branch1: 0, branch2: 0, branch3: 0 };
+      const qtyId = 'qty' + (BRANCH_KEYS.indexOf(activeBranch) + 1);
+      const tgtId = 'target' + (BRANCH_KEYS.indexOf(activeBranch) + 1);
+      branches[activeBranch] = Math.max(0, parseInt($(qtyId).value, 10) || 0);
+      targets[activeBranch]  = Math.max(0, parseInt($(tgtId).value, 10) || 0);
+    }
+  } else {
+    // РЕДАКТИРОВАНИЕ существующего товара
+    if (isAll) {
+      // Видны все три филиала — обновляем все
+      BRANCH_KEYS.forEach((k, idx) => {
+        branches[k] = Math.max(0, parseInt($('qty' + (idx + 1)).value, 10) || 0);
+        targets[k]  = Math.max(0, parseInt($('target' + (idx + 1)).value, 10) || 0);
+      });
+    } else {
+      // Виден только активный филиал — меняем только его
+      const idx = BRANCH_KEYS.indexOf(activeBranch);
+      branches[activeBranch] = Math.max(0, parseInt($('qty' + (idx + 1)).value, 10) || 0);
+      targets[activeBranch]  = Math.max(0, parseInt($('target' + (idx + 1)).value, 10) || 0);
+    }
+  }
+
   const product = {
     id:          state.editingProductId || uid(),
     name,
     category:    $('editCategory').value || 'other',
-    description: $('editDesc').value.trim(),
+    description: original?.description || '', // поле описания удалено из UI, но сохраняем совместимость
     photo:       state.photoDataUrl,
-    branches: {
-      branch1: Math.max(0, parseInt($('qty1').value, 10) || 0),
-      branch2: Math.max(0, parseInt($('qty2').value, 10) || 0),
-      branch3: Math.max(0, parseInt($('qty3').value, 10) || 0),
-    },
-    targets: {
-      branch1: Math.max(0, parseInt($('target1').value, 10) || 0),
-      branch2: Math.max(0, parseInt($('target2').value, 10) || 0),
-      branch3: Math.max(0, parseInt($('target3').value, 10) || 0),
-    },
+    branches,
+    targets,
+    // createdAt — нужен для стабильной «manual» сортировки
+    createdAt:   original?.createdAt || Date.now(),
   };
 
   if (isEdit) {
@@ -1621,10 +2004,11 @@ async function saveProduct() {
     await writeLog('edit', `"${product.name}"`, {
       productId: product.id, productName: product.name,
     });
-    showToast('✓ Сохранено', 'success');
+    showToast('Сохранено', 'success');
   } else {
-    state.products.unshift(product);
-    showToast('✓ Товар добавлен', 'success');
+    // НЕ unshift! Добавляем в конец, чтобы порядок «как добавили» работал стабильно
+    state.products.push(product);
+    showToast('Товар добавлен', 'success');
     await writeLog('add', `"${product.name}"`, {
       productId: product.id, productName: product.name,
     });
@@ -1640,7 +2024,7 @@ async function saveProduct() {
    DELETE
 =========================================================== */
 function openConfirmModal(productId) {
-  if (!isManager()) { showToast('⛔ Удаление доступно только менеджеру', 'error'); return; }
+  if (!isManager()) { showToast('Удаление доступно только менеджеру', 'error'); return; }
   const p = state.products.find(pr => pr.id === productId);
   if (!p) return;
   $('confirmText').textContent = `Удалить "${p.name}"? Это действие нельзя отменить.`;
@@ -1656,7 +2040,7 @@ async function deleteProduct(productId) {
     state.products.splice(idx, 1);
     saveLocal(STORAGE_KEY, state.products);
     renderAll();
-    showToast(`✓ "${name}" удалён`, 'success');
+    showToast(`"${name}" удалён`, 'success');
     await writeLog('delete', `"${name}"`, { productId, productName: name });
     await fbDeleteProduct(productId);
   }
@@ -1796,11 +2180,11 @@ function preparePrint() {
   const thead = $('printTableHead');
   if (showAll) {
     thead.innerHTML = `
-      <th style="width:60px">Фото</th><th>Товар</th><th>Категория</th>
+      <th style="width:60px">Фото</th><th>Товар</th>
       ${BRANCH_KEYS.map(k => `<th style="text-align:center">${BRANCH_LABELS[k]}<br><small style="font-weight:400;color:#888">факт / норма</small></th>`).join('')}
       <th>Итого</th>`;
   } else {
-    thead.innerHTML = `<th style="width:60px">Фото</th><th>Товар</th><th>Категория</th><th style="text-align:center">Факт</th><th style="text-align:center">Норма</th>`;
+    thead.innerHTML = `<th style="width:60px">Фото</th><th>Товар</th><th style="text-align:center">Факт</th><th style="text-align:center">Норма</th>`;
   }
 
   $('printTableBody').innerHTML = list.map(p => {
@@ -1820,14 +2204,13 @@ function preparePrint() {
       const t = p.targets?.[state.activeBranch] ?? 0;
       dataCells = `<td class="print-td-total" style="text-align:center;${q === 0 ? 'color:#ccc' : ''}">${q} шт</td><td style="text-align:center;color:#8a4d04">${t > 0 ? t + ' шт' : '—'}</td>`;
     }
+    // Без описания и без столбца категории — только название и данные
     return `
       <tr>
         <td>${imgHtml}</td>
         <td>
           <div class="print-td-name">${escHtml(p.name)}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px">${escHtml(p.description || '')}</div>
         </td>
-        <td>${escHtml(CATEGORY_LABELS[p.category] || p.category)}</td>
         ${dataCells}
       </tr>`;
   }).join('');
@@ -1908,7 +2291,7 @@ function initPageNavigation() {
       const page = btn.dataset.page;
       // Защита: отчёты — только менеджер
       if (page === 'reports' && !isManager()) {
-        showToast('⛔ Отчёты доступны только менеджеру', 'error');
+        showToast('Отчёты доступны только менеджеру', 'error');
         return;
       }
       // Закрываем drawer
@@ -2025,18 +2408,28 @@ function saveQtyInstant(productId, newQty) {
         state.inlinePhotos.delete(productId);
         const card = document.querySelector(`.product-card[data-id="${productId}"]`);
         if (card) card.classList.remove('has-photo');
-        showToast(`✓ Отчёт сохранён: ${newQty} шт`, 'success');
+        showToast(`Отчёт сохранён: ${newQty} шт`, 'success');
       } else {
         // Простое обновление количества (без фото) — пишем лог qtyEdit
         await writeLog('qtyEdit',
           `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма ${target})` : ''}`,
           { productId, productName: product.name, oldQty, newQty, target });
-        showToast(`✓ Сохранено: ${newQty} шт`, 'success');
+        showToast(`Сохранено: ${newQty} шт`, 'success');
       }
       await fbSaveProduct(updated);
+
+      // Зелёная вспышка на инпуте — визуальное подтверждение сохранения
+      const inp = document.querySelector(`[data-qty-input="${productId}"]`);
+      if (inp) {
+        inp.classList.remove('saved');
+        // Force reflow для перезапуска анимации
+        void inp.offsetWidth;
+        inp.classList.add('saved');
+        setTimeout(() => inp.classList.remove('saved'), 600);
+      }
     } catch (err) {
       console.error('saveQtyInstant error', err);
-      showToast('⚠ Ошибка сохранения, попробуйте ещё раз', 'error');
+      showToast('Ошибка сохранения, попробуйте ещё раз', 'error');
     }
   }, 350));
 }
@@ -2118,10 +2511,10 @@ function initPhotoChoiceSheet() {
       state.inlinePhotos.set(pid, dataUrl);
       const card = document.querySelector(`.product-card[data-id="${pid}"]`);
       if (card) card.classList.add('has-photo');
-      showToast('📸 Фото прикреплено — следующее изменение остатка будет с фото', 'success');
+      showToast('Фото прикреплено — следующее изменение остатка будет с фото', 'success');
     } catch (err) {
       console.error(err);
-      showToast('⚠ Ошибка загрузки фото', 'error');
+      showToast('Ошибка загрузки фото', 'error');
     }
   });
 }
@@ -2166,7 +2559,7 @@ function initProofPhotoUpload() {
       if (rm)   rm.style.display = 'block';
     } catch (err) {
       console.error(err);
-      showToast('⚠ Ошибка загрузки фото', 'error');
+      showToast('Ошибка загрузки фото', 'error');
     }
   });
 
@@ -2253,7 +2646,7 @@ function renderGalleryPage() {
         </div>
         <div class="gallery-card__body">
           <div class="gallery-card__name">${escHtml(entry.productName)}</div>
-          <div class="gallery-card__date">📅 ${new Date(entry.ts).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</div>
+          <div class="gallery-card__date">${new Date(entry.ts).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</div>
         </div>
       </div>`;
   }).join('');
@@ -2424,7 +2817,7 @@ function renderReportsPage() {
       const delay = Math.min(i * 30, 300);
       const branchLabel = BRANCH_LABELS[proof.branch] || proof.branch;
       const cat = proof.category || 'other';
-      const catLabel = `${CATEGORY_EMOJI[cat] || '📦'} ${CATEGORY_LABELS[cat] || 'Прочее'}`;
+      const catLabel = getCategoryLabel(cat);
       const target = proof.target || 0;
       const qty = proof.qty || 0;
       const isMiss = target > 0 && qty < target;
@@ -2438,7 +2831,7 @@ function renderReportsPage() {
         if (diff < 0) {
           deficitHtml = `<span class="proof-card__deficit">−${Math.abs(diff)} шт не хватает</span>`;
         } else if (diff === 0) {
-          deficitHtml = `<span class="proof-card__deficit proof-card__deficit--ok">✓ всё на месте</span>`;
+          deficitHtml = `<span class="proof-card__deficit proof-card__deficit--ok">всё на месте</span>`;
         } else {
           deficitHtml = `<span class="proof-card__deficit proof-card__deficit--ok">+${diff} шт</span>`;
         }
@@ -2446,7 +2839,7 @@ function renderReportsPage() {
 
       const photoHtml = proof.photo
         ? `<img src="${proof.photo}" alt="${escHtml(proof.productName)}" loading="lazy"/>`
-        : `<div class="proof-card__photo--empty">📷</div>`;
+        : `<div class="proof-card__photo--empty">фото</div>`;
 
       return `
         <div class="proof-card ${cardCls}" data-proof-id="${escHtml(proof.id)}" style="animation-delay:${delay}ms">
@@ -2457,9 +2850,9 @@ function renderReportsPage() {
               <div class="proof-card__time">${formatTime(proof.ts)}</div>
             </div>
             <div class="proof-card__meta">
-              <span class="proof-card__chip proof-card__chip--branch">🏪 ${escHtml(branchLabel)}</span>
+              <span class="proof-card__chip proof-card__chip--branch">${escHtml(branchLabel)}</span>
               <span class="proof-card__chip proof-card__chip--cat">${escHtml(catLabel)}</span>
-              <span class="proof-card__chip proof-card__chip--user">👤 ${escHtml(proof.userName || '')}</span>
+              <span class="proof-card__chip proof-card__chip--user">${escHtml(proof.userName || '')}</span>
             </div>
             <div class="proof-card__numbers">
               <span class="proof-card__qty ${qtyCls}">${qty} шт</span>
@@ -2495,15 +2888,17 @@ function renderReportsPage() {
 }
 
 /* ===========================================================
-   EXCEL EXPORT (SheetJS)
+   EXCEL EXPORT — стиль печатного отчёта
+   Это экспорт ОТЧЁТОВ от сотрудников (страница Отчёты).
+   Стиль: красивая шапка, чёткие границы, без эмодзи и категорий.
 =========================================================== */
 function exportToExcel() {
   if (!isManager()) {
-    showToast('⛔ Только менеджер может выгружать Excel', 'error');
+    showToast('Только менеджер может выгружать Excel', 'error');
     return;
   }
   if (typeof XLSX === 'undefined') {
-    showToast('⚠ Библиотека Excel не загружена', 'error');
+    showToast('Библиотека Excel не загружена', 'error');
     return;
   }
 
@@ -2513,9 +2908,16 @@ function exportToExcel() {
     return;
   }
 
-  // Заголовки и данные
-  const header = ['Дата', 'Время', 'Филиал', 'Категория', 'Товар', 'Должно быть', 'Фактически', 'Расхождение', 'Сотрудник', 'Комментарий'];
-  const rows = list.map(p => {
+  // ── Шапка документа (вверху листа): название, дата, период
+  const now = new Date();
+  const docDate = now.toLocaleDateString('ru-RU', {
+    day: '2-digit', month: 'long', year: 'numeric'
+  });
+
+  // Заголовки колонок (без «Категория» — для бухгалтера это лишний шум)
+  const header = ['№', 'Дата', 'Время', 'Филиал', 'Товар', 'Норма', 'Факт', 'Расхождение', 'Сотрудник', 'Комментарий'];
+
+  const rows = list.map((p, i) => {
     const d = new Date(p.ts);
     const date = d.toLocaleDateString('ru-RU');
     const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
@@ -2523,10 +2925,10 @@ function exportToExcel() {
     const qty = p.qty || 0;
     const diff = target > 0 ? (qty - target) : '';
     return [
+      i + 1,
       date,
       time,
       BRANCH_LABELS[p.branch] || p.branch,
-      CATEGORY_LABELS[p.category] || 'Прочее',
       p.productName || '',
       target > 0 ? target : '',
       qty,
@@ -2536,50 +2938,121 @@ function exportToExcel() {
     ];
   });
 
-  const wsData = [header, ...rows];
+  // ── Структура листа:
+  //  Строка 0:  «Склад Mone — Отчёт по остаткам»
+  //  Строка 1:  «Сформировано: 12 мая 2026»
+  //  Строка 2:  (пусто)
+  //  Строка 3:  Заголовки
+  //  Строки 4+: Данные
+  //  Строка N+1: Итого записей
+  const wsData = [
+    ['Склад Mone — Отчёт по остаткам'],
+    [`Сформировано: ${docDate}`],
+    [],
+    header,
+    ...rows,
+    [],
+    [`Всего записей: ${list.length}`],
+  ];
+
   const ws = XLSX.utils.aoa_to_sheet(wsData);
+  const lastCol = header.length - 1;
+  const headerRow = 3;          // 0-based индекс строки заголовков
+  const dataStart = headerRow + 1;
+  const dataEnd   = dataStart + rows.length - 1;
+  const totalRow  = dataEnd + 2;
+
+  // Объединение ячеек для шапки документа
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }, // название
+    { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } }, // дата
+    { s: { r: totalRow, c: 0 }, e: { r: totalRow, c: lastCol } }, // итого
+  ];
 
   // Ширина колонок
   ws['!cols'] = [
-    { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 22 }, { wch: 32 },
-    { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 40 },
+    { wch: 5  }, // №
+    { wch: 12 }, // Дата
+    { wch: 8  }, // Время
+    { wch: 14 }, // Филиал
+    { wch: 34 }, // Товар
+    { wch: 9  }, // Норма
+    { wch: 9  }, // Факт
+    { wch: 14 }, // Расхождение
+    { wch: 22 }, // Сотрудник
+    { wch: 40 }, // Комментарий
   ];
 
-  // Высота строки заголовка
-  ws['!rows'] = [{ hpt: 28 }];
+  // Высоты строк
+  ws['!rows'] = [];
+  ws['!rows'][0] = { hpt: 28 }; // заголовок документа
+  ws['!rows'][1] = { hpt: 18 }; // дата
+  ws['!rows'][2] = { hpt: 8  }; // отступ
+  ws['!rows'][headerRow] = { hpt: 26 }; // заголовок таблицы
 
-  // Стили заголовка (SheetJS Community поддерживает только базовые стили,
-  // но мы добавим bold/fill через расширенный подход)
-  const headerRange = XLSX.utils.decode_range(ws['!ref']);
-  for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
-    const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
-    if (!ws[cellRef]) continue;
+  // ── Стили
+  // Шапка документа (строка 0)
+  const titleRef = XLSX.utils.encode_cell({ r: 0, c: 0 });
+  if (ws[titleRef]) {
+    ws[titleRef].s = {
+      font: { bold: true, sz: 16, color: { rgb: '1F2937' } },
+      alignment: { horizontal: 'left', vertical: 'center' },
+      fill: { fgColor: { rgb: 'FFFFFF' } },
+    };
+  }
+  // Дата (строка 1)
+  const dateRef = XLSX.utils.encode_cell({ r: 1, c: 0 });
+  if (ws[dateRef]) {
+    ws[dateRef].s = {
+      font: { sz: 10, color: { rgb: '6B7280' }, italic: true },
+      alignment: { horizontal: 'left', vertical: 'center' },
+      fill: { fgColor: { rgb: 'FFFFFF' } },
+    };
+  }
+
+  // Заголовки таблицы (строка 3)
+  for (let C = 0; C <= lastCol; C++) {
+    const cellRef = XLSX.utils.encode_cell({ r: headerRow, c: C });
+    if (!ws[cellRef]) ws[cellRef] = { t: 's', v: header[C] };
     ws[cellRef].s = {
-      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 12 },
-      fill: { fgColor: { rgb: '1877F2' } },
+      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
+      fill: { fgColor: { rgb: '1F2937' } },
       alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
       border: {
-        top:    { style: 'thin', color: { rgb: '888888' } },
-        bottom: { style: 'thin', color: { rgb: '888888' } },
-        left:   { style: 'thin', color: { rgb: '888888' } },
-        right:  { style: 'thin', color: { rgb: '888888' } },
+        top:    { style: 'medium', color: { rgb: '1F2937' } },
+        bottom: { style: 'medium', color: { rgb: '1F2937' } },
+        left:   { style: 'thin',   color: { rgb: '4B5563' } },
+        right:  { style: 'thin',   color: { rgb: '4B5563' } },
       },
     };
   }
 
-  // Подсветка строк с недостачей и зебра
-  for (let R = 1; R <= rows.length; R++) {
-    const isMiss = typeof rows[R-1][7] === 'string' && rows[R-1][7].startsWith('-');
-    const isZebra = R % 2 === 0;
-    const fillRgb = isMiss ? 'FDECEC' : (isZebra ? 'F7F8FA' : 'FFFFFF');
-    for (let C = headerRange.s.c; C <= headerRange.e.c; C++) {
+  // Строки данных
+  for (let i = 0; i < rows.length; i++) {
+    const R = dataStart + i;
+    const isMiss = typeof rows[i][7] === 'string' && rows[i][7].startsWith('-');
+    const isZebra = i % 2 === 1;
+    const fillRgb = isMiss ? 'FFF1F1' : (isZebra ? 'F9FAFB' : 'FFFFFF');
+
+    for (let C = 0; C <= lastCol; C++) {
       const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
       if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
+
+      // Колонки 0(№), 1(Дата), 2(Время), 5(Норма), 6(Факт), 7(Расхождение) — центр
+      const centerCols = [0, 1, 2, 5, 6, 7];
+      const isDiff = C === 7;
       ws[cellRef].s = {
-        font: { sz: 11, color: { rgb: isMiss && C === 7 ? 'C42424' : '222222' }, bold: isMiss && C === 7 },
+        font: {
+          sz: 10,
+          color: { rgb: isMiss && isDiff ? 'B91C1C' : '111827' },
+          bold: isMiss && isDiff,
+        },
         fill: { fgColor: { rgb: fillRgb } },
-        alignment: { vertical: 'center', wrapText: true,
-          horizontal: ([5, 6, 7].includes(C)) ? 'center' : 'left' },
+        alignment: {
+          vertical: 'center',
+          wrapText: true,
+          horizontal: centerCols.includes(C) ? 'center' : 'left',
+        },
         border: {
           top:    { style: 'thin', color: { rgb: 'E5E7EB' } },
           bottom: { style: 'thin', color: { rgb: 'E5E7EB' } },
@@ -2590,17 +3063,33 @@ function exportToExcel() {
     }
   }
 
+  // Итоговая строка
+  const totalRef = XLSX.utils.encode_cell({ r: totalRow, c: 0 });
+  if (ws[totalRef]) {
+    ws[totalRef].s = {
+      font: { bold: true, sz: 11, color: { rgb: '1F2937' } },
+      alignment: { horizontal: 'right', vertical: 'center' },
+      fill: { fgColor: { rgb: 'F3F4F6' } },
+      border: {
+        top: { style: 'medium', color: { rgb: '1F2937' } },
+      },
+    };
+  }
+
+  // Закрепить шапку при прокрутке
+  ws['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
+
   // Создаём книгу
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Отчёты');
+  XLSX.utils.book_append_sheet(wb, ws, 'Отчёт');
 
   // Имя файла с датой
   const today = new Date();
   const dateStr = today.toLocaleDateString('ru-RU').replaceAll('.', '-');
-  const fileName = `Отчёт_${dateStr}.xlsx`;
+  const fileName = `Отчёт_по_остаткам_${dateStr}.xlsx`;
 
   XLSX.writeFile(wb, fileName);
-  showToast(`✓ Скачано: ${fileName}`, 'success');
+  showToast(`Скачано: ${fileName}`, 'success');
 }
 
 /* ===========================================================
