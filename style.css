@@ -4828,3 +4828,23 @@ body.role-staff .drawer-item--branch { display: none !important; }
   padding-bottom: 12px;
 }
 
+
+/* ============================================================
+   V5: Скромная норма под штуками (только менеджеру)
+============================================================ */
+.branch-row__qty-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  line-height: 1.15;
+}
+.branch-row__norm {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-muted, #8a8d91);
+  font-style: italic;
+  opacity: 0.85;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
