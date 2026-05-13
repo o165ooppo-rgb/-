@@ -348,25 +348,46 @@ function bootstrapCategoriesIfMissing() {
 function initFirebaseListeners() {
   showSyncIndicator('connecting');
 
+  // Снимок предыдущей версии товаров для сравнения
+  let prevSnapshot = null;
+
   onValue(PRODUCTS_REF, (snap) => {
     const data = snap.val();
-    state.products = data ? Object.values(data) : [];
+    const newProducts = data ? Object.values(data) : [];
     // Миграция: добавляем targets, category и createdAt для старых товаров
-    let baseTs = Date.now() - state.products.length * 1000;
-    state.products.forEach((p, idx) => {
+    let baseTs = Date.now() - newProducts.length * 1000;
+    newProducts.forEach((p, idx) => {
       if (!p.targets)   p.targets   = { branch1: 0, branch2: 0, branch3: 0 };
       if (!p.category)  p.category  = 'other';
       if (!p.createdAt) p.createdAt = baseTs + idx * 1000; // стабильный порядок для старых
     });
+
+    // Проверяем: изменилось ли что-то кроме остатков?
+    // Если только остатки — делаем мягкое обновление БЕЗ ререндера (товары не перепрыгивают).
+    const onlyQtyChanged = canDoSoftUpdate(prevSnapshot, newProducts);
+
+    state.products = newProducts;
     saveLocal(STORAGE_KEY, state.products);
     state.firebaseLoaded = true;
-    // Если пользователь сейчас вводит цифру в степпер — не делаем полный ререндер,
-    // просто обновляем числовые ячейки на карточках. Это сохраняет фокус инпута.
-    if (shouldDoPartialUpdate()) {
+
+    if (onlyQtyChanged || shouldDoPartialUpdate()) {
+      // Мягкое обновление: меняем числа в карточках, порядок не трогаем
       state.products.forEach(p => updateCardQtyDisplay(p.id));
+      $('statsText').textContent = `Товаров: ${getFilteredProducts().length}`;
     } else {
       renderAll();
     }
+
+    // Сохраняем снимок для следующего сравнения
+    prevSnapshot = newProducts.map(p => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      photo: p.photo,
+      branches: { ...p.branches },
+      targets: { ...p.targets },
+    }));
+
     showSyncIndicator('ok');
   }, (err) => {
     console.error('[products]', err);
@@ -1606,48 +1627,43 @@ function buildCard(product, index) {
       </div>`;
 
   const showAllBranches = isManager() && branch === 'all';
+  const showNorm = isManager(); // норма видна ТОЛЬКО менеджеру
   let branchesHtml = '';
   if (showAllBranches) {
     branchesHtml = BRANCH_KEYS.map(k => {
       const bqty = product.branches?.[k] ?? 0;
       const btarget = product.targets?.[k] ?? 0;
       const cls  = bqty === 0 ? 'branch-row__qty--out' : bqty <= 3 ? 'branch-row__qty--low' : '';
-      const targetTag = btarget > 0 ? `<span class="branch-row__target">из ${btarget}</span>` : '';
+      // Скромная норма серым, в скобках — только для менеджера
+      const normHint = (showNorm && btarget > 0)
+        ? `<span class="branch-row__norm">(норма: ${btarget})</span>`
+        : '';
       return `
         <div class="branch-row">
           <span class="branch-row__label">${BRANCH_LABELS[k]}</span>
-          <span class="branch-row__qty ${cls}">${bqty} шт ${targetTag}</span>
+          <span class="branch-row__qty-wrap">
+            <span class="branch-row__qty ${cls}">${bqty} шт</span>
+            ${normHint}
+          </span>
         </div>`;
     }).join('');
   } else {
     const cls = qty === 0 ? 'branch-row__qty--out' : qty <= 3 ? 'branch-row__qty--low' : '';
     const branchLabel = isManager() ? BRANCH_LABELS[branch] : 'Остаток';
+    const normHint = (showNorm && target > 0)
+      ? `<span class="branch-row__norm">(норма: ${target})</span>`
+      : '';
     branchesHtml = `
       <div class="branch-row">
         <span class="branch-row__label">${branchLabel}</span>
-        <span class="branch-row__qty ${cls}">${qty} шт</span>
+        <span class="branch-row__qty-wrap">
+          <span class="branch-row__qty ${cls}">${qty} шт</span>
+          ${normHint}
+        </span>
       </div>`;
   }
 
-  // Бейдж "Должно быть" — для менеджера всегда; для сотрудника тоже (полезная инфа)
-  let targetHtml = '';
-  if (!showAllBranches && target > 0) {
-    const isMiss = qty < target;
-    targetHtml = `
-      <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
-        <span class="product-card__target-label">Должно быть</span>
-        <span class="product-card__target-value">${qty} / ${target}</span>
-      </div>`;
-  } else if (showAllBranches && getTarget(product) > 0) {
-    const totalQ = getQty(product);
-    const totalT = getTarget(product);
-    const isMiss = totalQ < totalT;
-    targetHtml = `
-      <div class="product-card__target ${isMiss ? 'product-card__target--miss' : ''}">
-        <span class="product-card__target-label">Норма (всего)</span>
-        <span class="product-card__target-value">${totalQ} / ${totalT}</span>
-      </div>`;
-  }
+  // Блок «Должно быть / Норма» удалён полностью — норма теперь скромно под штуками
 
   // Иконка камеры (только для сотрудника) — для прикрепления фото-доказательства
   let cameraBtnHtml = '';
@@ -1689,7 +1705,6 @@ function buildCard(product, index) {
       <div class="product-card__body">
         <div class="product-card__name">${escHtml(product.name)}</div>
         <div class="product-card__branches">${branchesHtml}</div>
-        ${targetHtml}
       </div>
       ${stepperHtml}
     </div>`;
@@ -2346,6 +2361,29 @@ const _qtySaveTimers = new Map();
 
 // Возвращает true, если сейчас не следует делать полный ререндер карточек
 // (пользователь работает с инпутом или ждёт ответа сети)
+/**
+ * Можно ли обновить страницу «мягко» — без полного ререндера и без перепрыгивания товаров?
+ * Возвращает true, если изменились ТОЛЬКО остатки (branches) или нормы (targets)
+ * у уже существующих товаров. Если добавили/удалили товар, поменяли имя/фото/категорию —
+ * нужен полный ререндер.
+ */
+function canDoSoftUpdate(prev, next) {
+  if (!prev) return false; // первая загрузка — нужен полный рендер
+  if (prev.length !== next.length) return false;
+
+  // Индексируем prev по id для быстрой проверки
+  const prevById = new Map(prev.map(p => [p.id, p]));
+  for (const np of next) {
+    const op = prevById.get(np.id);
+    if (!op) return false;             // появился новый id
+    if (op.name !== np.name) return false;
+    if (op.category !== np.category) return false;
+    if (op.photo !== np.photo) return false;
+    // branches и targets могут меняться — это и есть «мягкое» обновление, разрешаем
+  }
+  return true;
+}
+
 function shouldDoPartialUpdate() {
   if (!isStaff()) return false;
   if (state.currentPage !== 'products') return false;
@@ -2452,13 +2490,21 @@ function updateCardQtyDisplay(productId) {
     qtyCell.textContent = `${qty} шт`;
   }
 
-  // Обновляем бейдж "Должно быть"
-  const targetBadge = card.querySelector('.product-card__target-value');
-  if (targetBadge && target > 0) {
-    targetBadge.textContent = `${qty} / ${target}`;
-    const targetBox = card.querySelector('.product-card__target');
-    if (targetBox) {
-      targetBox.classList.toggle('product-card__target--miss', qty < target);
+  // Обновляем скромную норму "(норма: X)" — только для менеджера
+  if (isManager()) {
+    const normCell = card.querySelector('.branch-row__norm');
+    const wrap = card.querySelector('.branch-row__qty-wrap');
+    if (target > 0) {
+      if (normCell) {
+        normCell.textContent = `(норма: ${target})`;
+      } else if (wrap) {
+        const span = document.createElement('span');
+        span.className = 'branch-row__norm';
+        span.textContent = `(норма: ${target})`;
+        wrap.appendChild(span);
+      }
+    } else if (normCell) {
+      normCell.remove();
     }
   }
 
