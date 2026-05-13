@@ -257,6 +257,69 @@ function getTarget(product, branch = 'all') {
   return product.targets?.[branch] ?? 0;
 }
 
+/**
+ * Возвращает timestamp начала сегодняшнего дня (00:00 локального времени).
+ * Используется для определения «вчерашних» вводов.
+ */
+function getTodayStart() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * Возвращает информацию о «последнем остатке за прошлый день» для конкретного филиала.
+ * Если последний ввод был СЕГОДНЯ (>= 00:00 сегодня) → возвращает null
+ *   (показывать «Вчера: X» не нужно, цифра в инпуте — это и есть свежий ввод).
+ * Если последний ввод был ВЧЕРА или раньше → возвращает {qty, ts, userName, label}
+ *   где label = «Вчера», «2 дня назад», «12 авг», и т.д.
+ */
+function getYesterdayInfo(product, branch) {
+  const entry = product.lastEntries?.[branch];
+  if (!entry || typeof entry.qty !== 'number') return null;
+
+  const todayStart = getTodayStart();
+  if (entry.ts >= todayStart) return null; // ввод был сегодня — это не «вчера»
+
+  // Определяем подпись
+  const dayMs = 24 * 60 * 60 * 1000;
+  const yesterdayStart = todayStart - dayMs;
+  let label;
+  if (entry.ts >= yesterdayStart) {
+    label = 'Вчера';
+  } else {
+    const daysAgo = Math.floor((todayStart - entry.ts) / dayMs);
+    if (daysAgo < 7) {
+      label = `${daysAgo} ${daysAgo === 1 ? 'день' : daysAgo < 5 ? 'дня' : 'дней'} назад`;
+    } else {
+      label = new Date(entry.ts).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+    }
+  }
+
+  return { qty: entry.qty, ts: entry.ts, userName: entry.userName || '', label };
+}
+
+/**
+ * Возвращает количество ШТУК, которое нужно показать в поле ввода у сотрудника.
+ * Если последний ввод был сегодня → показываем то значение, что в branches[k].
+ * Если последний ввод был вчера или раньше → показываем 0 (новый день — новый ввод).
+ */
+function getCurrentInputQty(product, branch) {
+  const entry = product.lastEntries?.[branch];
+  if (!entry) {
+    // Нет записи о вводе — это либо новый товар, либо мигрированный.
+    // Показываем то, что лежит в branches[k] (для обратной совместимости).
+    return product.branches?.[branch] ?? 0;
+  }
+  const todayStart = getTodayStart();
+  if (entry.ts >= todayStart) {
+    // Ввод был сегодня → показываем его
+    return product.branches?.[branch] ?? entry.qty ?? 0;
+  }
+  // Ввод был вчера или раньше → новый день начинается с 0
+  return 0;
+}
+
 function formatRelative(ts) {
   const diff = Date.now() - ts;
   const min  = Math.floor(diff / 60000);
@@ -360,6 +423,19 @@ function initFirebaseListeners() {
       if (!p.targets)   p.targets   = { branch1: 0, branch2: 0, branch3: 0 };
       if (!p.category)  p.category  = 'other';
       if (!p.createdAt) p.createdAt = baseTs + idx * 1000; // стабильный порядок для старых
+      // Если есть остатки но нет истории lastEntries — создаём её с датой ВЧЕРАШНЕГО дня,
+      // чтобы существующие данные отобразились как «Вчера: X шт», а инпут стал 0.
+      if (!p.lastEntries) {
+        const dayMs = 24 * 60 * 60 * 1000;
+        const yesterdayTs = Date.now() - dayMs;
+        p.lastEntries = {};
+        BRANCH_KEYS.forEach(k => {
+          const q = p.branches?.[k] ?? 0;
+          if (q > 0) {
+            p.lastEntries[k] = { qty: q, ts: yesterdayTs, userName: '' };
+          }
+        });
+      }
     });
 
     // Проверяем: изменилось ли что-то кроме остатков?
@@ -398,6 +474,17 @@ function initFirebaseListeners() {
         if (!p.targets)   p.targets   = { branch1: 0, branch2: 0, branch3: 0 };
         if (!p.category)  p.category  = 'other';
         if (!p.createdAt) p.createdAt = baseTs + idx * 1000;
+        if (!p.lastEntries) {
+          const dayMs = 24 * 60 * 60 * 1000;
+          const yesterdayTs = Date.now() - dayMs;
+          p.lastEntries = {};
+          BRANCH_KEYS.forEach(k => {
+            const q = p.branches?.[k] ?? 0;
+            if (q > 0) {
+              p.lastEntries[k] = { qty: q, ts: yesterdayTs, userName: '' };
+            }
+          });
+        }
       });
       state.firebaseLoaded = true;
       renderAll();
@@ -714,6 +801,23 @@ function enterApp() {
   updateDrawerProfile();
   updateBranchIndicator();
   switchPage('products');
+
+  // Планируем срабатывание ровно в полночь — чтобы карточки обновились
+  // и «Вчера: X шт» появилось, а инпуты сбросились в 0.
+  scheduleMidnightRefresh();
+}
+
+let _midnightTimer = null;
+function scheduleMidnightRefresh() {
+  if (_midnightTimer) clearTimeout(_midnightTimer);
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5); // +5 сек после полуночи на всякий случай
+  const ms = tomorrow.getTime() - now.getTime();
+  _midnightTimer = setTimeout(() => {
+    // Полночь наступила — перерисовываем сетку
+    if (state.currentPage === 'products') renderAll();
+    scheduleMidnightRefresh(); // на следующий день
+  }, ms);
 }
 
 async function handleLogout() {
@@ -1678,24 +1782,36 @@ function buildCard(product, index) {
   }
 
   // Степпер внизу карточки (только для сотрудника)
-  // Только цифра по центру. Тап → калькулятор и автовыделение, чтобы сразу перепечатать.
+  // Значение в инпуте — это ТЕКУЩИЙ ввод за СЕГОДНЯ.
+  // Если последний ввод был вчера или раньше → 0 (новый день, новый отсчёт).
   let stepperHtml = '';
+  let yesterdayHtml = '';
   if (isStaff()) {
+    const inputQty = getCurrentInputQty(product, branch);
     stepperHtml = `
       <div class="product-card__stepper product-card__stepper--simple" data-stepper-for="${product.id}">
         <input
           type="number"
           class="product-card__stepper-input product-card__stepper-input--solo"
           data-qty-input="${product.id}"
-          value="${qty}"
+          value="${inputQty}"
           min="0"
           inputmode="numeric"
           aria-label="Количество (шт)"
         />
         <span class="product-card__stepper-unit">шт</span>
       </div>`;
-  }
 
+    // «Вчера: X шт» — скромная подпись под названием товара (только если есть прошлый ввод)
+    const yest = getYesterdayInfo(product, branch);
+    if (yest) {
+      yesterdayHtml = `
+        <div class="product-card__yesterday">
+          <span class="product-card__yesterday-label">${escHtml(yest.label)}:</span>
+          <span class="product-card__yesterday-qty">${yest.qty} шт</span>
+        </div>`;
+    }
+  }
   return `
     <div class="product-card" data-id="${product.id}" style="animation-delay:${delay}ms">
       <div class="product-card__image-wrap">
@@ -1704,7 +1820,8 @@ function buildCard(product, index) {
       </div>
       <div class="product-card__body">
         <div class="product-card__name">${escHtml(product.name)}</div>
-        <div class="product-card__branches">${branchesHtml}</div>
+        ${yesterdayHtml}
+        ${isStaff() ? '' : `<div class="product-card__branches">${branchesHtml}</div>`}
       </div>
       ${stepperHtml}
     </div>`;
@@ -2402,10 +2519,19 @@ function saveQtyInstant(productId, newQty) {
   newQty = Math.max(0, parseInt(newQty, 10) || 0);
   if (newQty === oldQty) return; // ничего не изменилось
 
+  const now = Date.now();
+  const userName = state.currentUser?.name || state.currentUser?.username || '';
+
+  // Обновляем lastEntries — запоминаем кто/когда вводил.
+  // Это и есть «Вчера: X шт» на следующий день.
+  const lastEntries = { ...(product.lastEntries || {}) };
+  lastEntries[myBranch] = { qty: newQty, ts: now, userName };
+
   // Сразу обновляем локально, чтобы UI откликался мгновенно
   const updated = {
     ...product,
     branches: { ...product.branches, [myBranch]: newQty },
+    lastEntries,
   };
   const idx = state.products.findIndex(p => p.id === productId);
   if (idx > -1) state.products[idx] = updated;
@@ -2434,21 +2560,19 @@ function saveQtyInstant(productId, newQty) {
           target,
           branch:      myBranch,
           userId:      state.currentUser.id,
-          userName:    state.currentUser.name || state.currentUser.username,
+          userName,
           comment:     '',
-          ts:          Date.now(),
+          ts:          now,
         };
         await fbAddProof(proofEntry);
         await writeLog('proofSubmit',
           `"${product.name}": ${newQty} шт${target ? ` / норма ${target}` : ''}`,
           { productId, productName: product.name, oldQty, newQty, target });
-        // Сбрасываем фото — оно «израсходовано»
         state.inlinePhotos.delete(productId);
         const card = document.querySelector(`.product-card[data-id="${productId}"]`);
         if (card) card.classList.remove('has-photo');
         showToast(`Отчёт сохранён: ${newQty} шт`, 'success');
       } else {
-        // Простое обновление количества (без фото) — пишем лог qtyEdit
         await writeLog('qtyEdit',
           `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма ${target})` : ''}`,
           { productId, productName: product.name, oldQty, newQty, target });
@@ -2456,11 +2580,9 @@ function saveQtyInstant(productId, newQty) {
       }
       await fbSaveProduct(updated);
 
-      // Зелёная вспышка на инпуте — визуальное подтверждение сохранения
       const inp = document.querySelector(`[data-qty-input="${productId}"]`);
       if (inp) {
         inp.classList.remove('saved');
-        // Force reflow для перезапуска анимации
         void inp.offsetWidth;
         inp.classList.add('saved');
         setTimeout(() => inp.classList.remove('saved'), 600);
@@ -2482,7 +2604,7 @@ function updateCardQtyDisplay(productId) {
   const qty = product.branches?.[myBranch] ?? 0;
   const target = product.targets?.[myBranch] ?? 0;
 
-  // Обновляем строку "Остаток: X шт"
+  // Менеджерская строка "Остаток: X шт"
   const qtyCell = card.querySelector('.branch-row__qty');
   if (qtyCell) {
     const cls = qty === 0 ? 'branch-row__qty--out' : qty <= 3 ? 'branch-row__qty--low' : '';
@@ -2490,7 +2612,7 @@ function updateCardQtyDisplay(productId) {
     qtyCell.textContent = `${qty} шт`;
   }
 
-  // Обновляем скромную норму "(норма: X)" — только для менеджера
+  // Скромная норма "(норма: X)" — только для менеджера
   if (isManager()) {
     const normCell = card.querySelector('.branch-row__norm');
     const wrap = card.querySelector('.branch-row__qty-wrap');
@@ -2508,9 +2630,47 @@ function updateCardQtyDisplay(productId) {
     }
   }
 
-  // Синхронизируем input степпера (на случай если изменение пришло не через input)
-  const inp = card.querySelector(`[data-qty-input="${productId}"]`);
-  if (inp && document.activeElement !== inp) inp.value = qty;
+  // Для сотрудника:
+  // — обновляем input на «текущее за сегодня» (если ввод был не сегодня → 0)
+  // — обновляем подпись «Вчера: X шт»
+  if (isStaff()) {
+    const inp = card.querySelector(`[data-qty-input="${productId}"]`);
+    if (inp && document.activeElement !== inp) {
+      inp.value = getCurrentInputQty(product, myBranch);
+    }
+
+    // Подпись «Вчера: X шт»
+    const yest = getYesterdayInfo(product, myBranch);
+    const body = card.querySelector('.product-card__body');
+    let yestEl = card.querySelector('.product-card__yesterday');
+    if (yest) {
+      const html = `
+        <span class="product-card__yesterday-label">${escHtml(yest.label)}:</span>
+        <span class="product-card__yesterday-qty">${yest.qty} шт</span>`;
+      if (yestEl) {
+        yestEl.innerHTML = html;
+      } else if (body) {
+        const div = document.createElement('div');
+        div.className = 'product-card__yesterday';
+        div.innerHTML = html;
+        // Вставляем после названия товара
+        const nameEl = body.querySelector('.product-card__name');
+        if (nameEl && nameEl.nextSibling) {
+          body.insertBefore(div, nameEl.nextSibling);
+        } else if (nameEl) {
+          nameEl.after(div);
+        } else {
+          body.appendChild(div);
+        }
+      }
+    } else if (yestEl) {
+      yestEl.remove();
+    }
+  } else {
+    // Менеджер — простая синхронизация input если есть
+    const inp = card.querySelector(`[data-qty-input="${productId}"]`);
+    if (inp && document.activeElement !== inp) inp.value = qty;
+  }
 }
 
 // Открываем выбор «Камера / Галерея» для товара
