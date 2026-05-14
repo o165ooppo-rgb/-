@@ -5426,3 +5426,96 @@ body.gallery-selecting #pageGallery {
   color: #fff;
 }
 
+
+/* ============================================================
+   V11: Сворачиваемый блок "Остатки" в фильтре
+============================================================ */
+
+/* Кнопка-заголовок: показывает текущий выбор, по тапу разворачивает чипы */
+.filter-collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--surface2, #f0f2f5);
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-collapse-btn:hover {
+  background: #e4e6eb;
+  border-color: var(--border-light, #ebedf0);
+}
+.filter-collapse-btn:active {
+  transform: scale(0.99);
+}
+.filter-collapse-btn__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary, #65676b);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  flex-shrink: 0;
+}
+.filter-collapse-btn__value {
+  flex: 1;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary, #1c1e21);
+  letter-spacing: -0.1px;
+}
+/* Подсветка цветом по текущему выбору */
+.filter-collapse-btn__value[data-value="ok"]  { color: #1e8449; }
+.filter-collapse-btn__value[data-value="low"] { color: #b06900; }
+.filter-collapse-btn__value[data-value="out"] { color: var(--danger, #e02020); }
+.filter-collapse-btn__chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted, #8a8d91);
+  flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.filter-section--collapsible.is-open .filter-collapse-btn__chevron {
+  transform: rotate(180deg);
+}
+.filter-section--collapsible.is-open .filter-collapse-btn {
+  background: var(--accent-subtle, #ebf2ff);
+  border-color: var(--accent, #1877F2);
+}
+.filter-section--collapsible.is-open .filter-collapse-btn__label {
+  color: var(--accent, #1877F2);
+}
+
+/* Список чипов — скрыт по умолчанию, раскрывается плавно */
+.filter-stocks--collapsible {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin-top: 0;
+  padding-top: 0;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s ease,
+              margin-top 0.3s ease,
+              padding-top 0.3s ease;
+}
+.filter-section--collapsible.is-open .filter-stocks--collapsible {
+  max-height: 320px;
+  opacity: 1;
+  margin-top: 10px;
+  padding-top: 4px;
+}
+
+/* Чипы в одну колонку на узких экранах */
+@media (max-width: 380px) {
+  .filter-stocks--collapsible { grid-template-columns: 1fr; }
+  .filter-section--collapsible.is-open .filter-stocks--collapsible { max-height: 480px; }
+}
+

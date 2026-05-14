@@ -1627,6 +1627,16 @@ function initFilterModal() {
   $('filterModalClose').addEventListener('click', () => closeOverlay(modal));
   modal.addEventListener('click', e => { if (e.target === modal) closeOverlay(modal); });
 
+  // Тогл сворачивающегося блока "Остатки"
+  const stocksSection = $('filterStocksSection');
+  const stocksToggle  = $('filterStocksToggle');
+  if (stocksToggle && stocksSection) {
+    stocksToggle.addEventListener('click', () => {
+      const isOpen = stocksSection.classList.toggle('is-open');
+      stocksToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  }
+
   // Чипы статуса остатков
   modal.querySelectorAll('.filter-stock').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -1634,7 +1644,13 @@ function initFilterModal() {
       chip.classList.add('active');
       state.stockFilter = chip.dataset.stock;
       updateFilterBadge();
+      updateFilterStocksLabel();
       renderAll();
+      // После выбора сворачиваем блок — пользователь увидит результат
+      if (stocksSection) {
+        stocksSection.classList.remove('is-open');
+        stocksToggle.setAttribute('aria-expanded', 'false');
+      }
     });
   });
 
@@ -1673,6 +1689,7 @@ function initFilterModal() {
     modal.querySelectorAll('.filter-stock').forEach(c => c.classList.remove('active'));
     modal.querySelector('.filter-stock[data-stock="all"]').classList.add('active');
     updateFilterBadge();
+    updateFilterStocksLabel();
     refreshFilterModalCounts();
     renderAll();
     showToast('Фильтры сброшены');
@@ -1693,6 +1710,21 @@ function initFilterModal() {
   });
 }
 
+/** Обновляет подпись в свёрнутом блоке "Остатки" — показывает что сейчас выбрано */
+function updateFilterStocksLabel() {
+  const el = $('filterStocksCurrent');
+  if (!el) return;
+  const map = {
+    all: 'Все товары',
+    ok:  'В наличии',
+    low: 'Мало запасов',
+    out: 'Нет в наличии',
+  };
+  el.textContent = map[state.stockFilter] || 'Все товары';
+  // Подсветка цветом текущего фильтра
+  el.dataset.value = state.stockFilter;
+}
+
 function openFilterModal() {
   document.querySelectorAll('.filter-stock').forEach(c => {
     c.classList.toggle('active', c.dataset.stock === state.stockFilter);
@@ -1701,6 +1733,13 @@ function openFilterModal() {
   $('filterCategorySelect').value = state.categoryFilter;
   // Кнопку «Управлять категориями» показываем только менеджеру
   $('filterManageCatsBtn').style.display = isManager() ? '' : 'none';
+  // Подпись на свёрнутом блоке остатков
+  updateFilterStocksLabel();
+  // По умолчанию блок остатков свёрнут
+  const stocksSection = $('filterStocksSection');
+  const stocksToggle  = $('filterStocksToggle');
+  if (stocksSection) stocksSection.classList.remove('is-open');
+  if (stocksToggle)  stocksToggle.setAttribute('aria-expanded', 'false');
   refreshFilterModalCounts();
   openOverlay($('filterModal'));
 }

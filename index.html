@@ -512,10 +512,16 @@
       <h2 class="filter-modal__title">Фильтр</h2>
       <p class="filter-modal__sub" id="filterSubtitle">Найдите нужные товары</p>
 
-      <!-- Остатки -->
-      <div class="filter-section">
-        <div class="filter-section__title">Остатки</div>
-        <div class="filter-stocks" id="filterStocks">
+      <!-- Остатки (сворачиваемый блок) -->
+      <div class="filter-section filter-section--collapsible" id="filterStocksSection">
+        <button class="filter-collapse-btn" id="filterStocksToggle" type="button" aria-expanded="false">
+          <span class="filter-collapse-btn__label">Остатки</span>
+          <span class="filter-collapse-btn__value" id="filterStocksCurrent">Все товары</span>
+          <svg class="filter-collapse-btn__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="filter-stocks filter-stocks--collapsible" id="filterStocks">
           <button class="filter-stock active" data-stock="all">
             <span class="filter-stock__dot filter-stock__dot--all"></span>
             <span class="filter-stock__label">Все товары</span>
