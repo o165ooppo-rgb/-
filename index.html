@@ -416,10 +416,19 @@
     </div>
   </div>
 
-  <!-- ===== TOOLBAR (только счётчик товаров; фильтр перенесён в шапку) ===== -->
+  <!-- ===== TOOLBAR (поиск + счётчик товаров) ===== -->
   <div class="toolbar" id="mainToolbar" style="display:none">
     <div class="toolbar__inner">
       <div class="toolbar__row">
+        <div class="header-search-wrap">
+          <svg class="header-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" id="headerSearchInput" class="header-search-input" placeholder="Поиск товара..." autocomplete="off"/>
+          <button class="header-search-clear" id="headerSearchClear" aria-label="Очистить" style="display:none" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
         <div class="stats-bar">
           <span id="statsText">Товаров: 0</span>
         </div>
@@ -435,20 +444,6 @@
       </button>
       <h2 class="filter-modal__title">Фильтр</h2>
       <p class="filter-modal__sub" id="filterSubtitle">Найдите нужные товары</p>
-
-      <!-- Поиск -->
-      <div class="filter-section">
-        <div class="filter-section__title">Поиск</div>
-        <div class="filter-search-wrap">
-          <svg class="filter-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input type="text" id="filterSearchInput" class="filter-search-input" placeholder="Название товара..." autocomplete="off"/>
-          <button class="filter-search-clear" id="filterSearchClear" aria-label="Очистить" style="display:none">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-      </div>
 
       <!-- Остатки -->
       <div class="filter-section">
