@@ -1492,7 +1492,33 @@ function getFilteredProducts() {
    FILTER BAR
 =========================================================== */
 function initFilters() {
-  // Поиска нет — ничего не нужно инициализировать
+  // Поиск в шапке (toolbar) — теперь главное место для поиска товаров
+  const inp = $('headerSearchInput');
+  const clearBtn = $('headerSearchClear');
+  if (!inp) return;
+
+  let searchTimer = null;
+  inp.addEventListener('input', () => {
+    const v = inp.value;
+    if (clearBtn) clearBtn.style.display = v ? 'flex' : 'none';
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.searchQuery = v;
+      updateFilterBadge();
+      renderAll();
+    }, 180);
+  });
+
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      inp.value = '';
+      clearBtn.style.display = 'none';
+      state.searchQuery = '';
+      updateFilterBadge();
+      renderAll();
+      inp.focus();
+    });
+  }
 }
 
 function initFilterModal() {
@@ -1500,31 +1526,6 @@ function initFilterModal() {
   $('filterBtn').addEventListener('click', openFilterModal);
   $('filterModalClose').addEventListener('click', () => closeOverlay(modal));
   modal.addEventListener('click', e => { if (e.target === modal) closeOverlay(modal); });
-
-  // Поиск
-  const searchInp = $('filterSearchInput');
-  const searchClear = $('filterSearchClear');
-  let searchTimer = null;
-  if (searchInp) {
-    searchInp.addEventListener('input', () => {
-      const v = searchInp.value;
-      searchClear.style.display = v ? 'flex' : 'none';
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        state.searchQuery = v;
-        updateFilterBadge();
-        renderAll();
-      }, 200);
-    });
-    searchClear.addEventListener('click', () => {
-      searchInp.value = '';
-      searchClear.style.display = 'none';
-      state.searchQuery = '';
-      updateFilterBadge();
-      renderAll();
-      searchInp.focus();
-    });
-  }
 
   // Чипы статуса остатков
   modal.querySelectorAll('.filter-stock').forEach(chip => {
@@ -1562,8 +1563,11 @@ function initFilterModal() {
     state.categoryFilter = 'all';
     state.searchQuery = '';
     state.sortMode    = 'manual';
-    if (searchInp) searchInp.value = '';
-    if (searchClear) searchClear.style.display = 'none';
+    // Сбрасываем поле поиска в шапке
+    const hsi = $('headerSearchInput');
+    const hsc = $('headerSearchClear');
+    if (hsi) hsi.value = '';
+    if (hsc) hsc.style.display = 'none';
     $('filterSortSelect').value = 'manual';
     $('filterCategorySelect').value = 'all';
     modal.querySelectorAll('.filter-stock').forEach(c => c.classList.remove('active'));
@@ -1595,16 +1599,10 @@ function openFilterModal() {
   });
   $('filterSortSelect').value = state.sortMode;
   $('filterCategorySelect').value = state.categoryFilter;
-  $('filterSearchInput').value = state.searchQuery || '';
-  $('filterSearchClear').style.display = state.searchQuery ? 'flex' : 'none';
   // Кнопку «Управлять категориями» показываем только менеджеру
   $('filterManageCatsBtn').style.display = isManager() ? '' : 'none';
   refreshFilterModalCounts();
   openOverlay($('filterModal'));
-  // фокус на поиск только если на десктопе — на мобильном не открываем клавиатуру сразу
-  if (window.matchMedia && !window.matchMedia('(max-width: 767px)').matches) {
-    setTimeout(() => $('filterSearchInput').focus(), 200);
-  }
 }
 
 function refreshFilterModalCounts() {
@@ -2545,41 +2543,17 @@ function saveQtyInstant(productId, newQty) {
   _qtySaveTimers.set(productId, setTimeout(async () => {
     _qtySaveTimers.delete(productId);
     const target = product.targets?.[myBranch] ?? 0;
-    const photo = state.inlinePhotos.get(productId); // если есть прикреплённое фото
 
     try {
-      if (photo) {
-        // Сохраняем как отчёт-доказательство (с фото)
-        const proofEntry = {
-          id:          uid(),
-          productId:   productId,
-          productName: product.name,
-          category:    product.category || 'other',
-          photo,
-          qty:         newQty,
-          target,
-          branch:      myBranch,
-          userId:      state.currentUser.id,
-          userName,
-          comment:     '',
-          ts:          now,
-        };
-        await fbAddProof(proofEntry);
-        await writeLog('proofSubmit',
-          `"${product.name}": ${newQty} шт${target ? ` / норма ${target}` : ''}`,
-          { productId, productName: product.name, oldQty, newQty, target });
-        state.inlinePhotos.delete(productId);
-        const card = document.querySelector(`.product-card[data-id="${productId}"]`);
-        if (card) card.classList.remove('has-photo');
-        showToast(`Отчёт сохранён: ${newQty} шт`, 'success');
-      } else {
-        await writeLog('qtyEdit',
-          `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма ${target})` : ''}`,
-          { productId, productName: product.name, oldQty, newQty, target });
-        showToast(`Сохранено: ${newQty} шт`, 'success');
-      }
+      // Простое обновление количества — пишем лог qtyEdit.
+      // Отчёты-доказательства с фото уходят отдельно через submitProofForProduct().
+      await writeLog('qtyEdit',
+        `"${product.name}": ${oldQty} → ${newQty} шт${target ? ` (норма ${target})` : ''}`,
+        { productId, productName: product.name, oldQty, newQty, target });
       await fbSaveProduct(updated);
+      showToast(`Сохранено: ${newQty} шт`, 'success');
 
+      // Зелёная вспышка
       const inp = document.querySelector(`[data-qty-input="${productId}"]`);
       if (inp) {
         inp.classList.remove('saved');
@@ -2714,15 +2688,84 @@ function initPhotoChoiceSheet() {
     if (!file || !pid) return;
     try {
       const dataUrl = await compressImage(file);
-      state.inlinePhotos.set(pid, dataUrl);
-      const card = document.querySelector(`.product-card[data-id="${pid}"]`);
-      if (card) card.classList.add('has-photo');
-      showToast('Фото прикреплено — следующее изменение остатка будет с фото', 'success');
+      // СРАЗУ создаём отчёт с текущим количеством — не ждём смены цифры.
+      // Это починка бага: раньше отчёт уходил только при следующем изменении остатка,
+      // и если сотрудник просто фотографировал — менеджер ничего не видел.
+      await submitProofForProduct(pid, dataUrl);
     } catch (err) {
       console.error(err);
       showToast('Ошибка загрузки фото', 'error');
     }
   });
+}
+
+/**
+ * Создаёт отчёт-доказательство (proof) для товара.
+ * Вызывается СРАЗУ после прикрепления фото — менеджер увидит отчёт в галерее и в отчётах.
+ */
+async function submitProofForProduct(productId, photoDataUrl) {
+  const product = state.products.find(p => p.id === productId);
+  if (!product) {
+    showToast('Товар не найден', 'error');
+    return;
+  }
+  const myBranch = userBranch();
+  if (!myBranch) {
+    showToast('Не определён ваш филиал', 'error');
+    return;
+  }
+  const myInputQty = getCurrentInputQty(product, myBranch);
+  const target = product.targets?.[myBranch] ?? 0;
+  const userName = state.currentUser?.name || state.currentUser?.username || '';
+  const now = Date.now();
+
+  const proofEntry = {
+    id:          uid(),
+    productId:   productId,
+    productName: product.name,
+    category:    product.category || 'other',
+    photo:       photoDataUrl,
+    qty:         myInputQty,
+    target,
+    branch:      myBranch,
+    userId:      state.currentUser.id,
+    userName,
+    comment:     '',
+    ts:          now,
+  };
+
+  try {
+    await fbAddProof(proofEntry);
+    await writeLog('proofSubmit',
+      `"${product.name}": ${myInputQty} шт${target ? ` / норма ${target}` : ''}`,
+      { productId, productName: product.name, newQty: myInputQty, target });
+
+    // Обновляем lastEntries в товаре — фиксируем что сегодня было замечено столько
+    const lastEntries = { ...(product.lastEntries || {}) };
+    lastEntries[myBranch] = { qty: myInputQty, ts: now, userName };
+    const updated = {
+      ...product,
+      branches: { ...product.branches, [myBranch]: myInputQty },
+      lastEntries,
+    };
+    const idx = state.products.findIndex(p => p.id === productId);
+    if (idx > -1) state.products[idx] = updated;
+    saveLocal(STORAGE_KEY, state.products);
+    await fbSaveProduct(updated);
+
+    // Визуальная индикация в карточке — отметка что фото прикреплено
+    const card = document.querySelector(`.product-card[data-id="${productId}"]`);
+    if (card) {
+      card.classList.add('has-photo');
+      // Через 2 секунды убираем метку — иначе остаётся «залипшая» галочка
+      setTimeout(() => card.classList.remove('has-photo'), 2200);
+    }
+
+    showToast(`Отчёт отправлен менеджеру: ${myInputQty} шт`, 'success');
+  } catch (err) {
+    console.error('submitProofForProduct error', err);
+    showToast('Ошибка отправки отчёта', 'error');
+  }
 }
 
 /* ===========================================================
@@ -3114,15 +3157,40 @@ function exportToExcel() {
     return;
   }
 
-  // ── Шапка документа (вверху листа): название, дата, период
+  // ── Определяем текущий филиал для отчёта
+  const branchFilter = state.reportsBranchFilter || 'all';
+  const branchTitle = branchFilter === 'all'
+    ? 'Все филиалы'
+    : BRANCH_LABELS[branchFilter] || branchFilter;
+
+  // ── Текущая дата для шапки
   const now = new Date();
   const docDate = now.toLocaleDateString('ru-RU', {
-    day: '2-digit', month: 'long', year: 'numeric'
+    day: '2-digit', month: 'long', year: 'numeric',
+  });
+  const docTime = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+  // ── Считаем KPI
+  let totalQty = 0;
+  let totalTarget = 0;
+  let missCount = 0;       // отчётов с недостачей
+  let totalMiss = 0;       // суммарная недостача в шт
+  list.forEach(p => {
+    totalQty += (p.qty || 0);
+    if (p.target > 0) {
+      totalTarget += p.target;
+      if (p.qty < p.target) {
+        missCount++;
+        totalMiss += (p.target - p.qty);
+      }
+    }
   });
 
-  // Заголовки колонок (без «Категория» — для бухгалтера это лишний шум)
+  // ── Заголовки таблицы (всегда 10 колонок)
   const header = ['№', 'Дата', 'Время', 'Филиал', 'Товар', 'Норма', 'Факт', 'Расхождение', 'Сотрудник', 'Комментарий'];
+  const lastCol = header.length - 1;
 
+  // ── Строки данных
   const rows = list.map((p, i) => {
     const d = new Date(p.ts);
     const date = d.toLocaleDateString('ru-RU');
@@ -3144,155 +3212,290 @@ function exportToExcel() {
     ];
   });
 
-  // ── Структура листа:
-  //  Строка 0:  «Склад Mone — Отчёт по остаткам»
-  //  Строка 1:  «Сформировано: 12 мая 2026»
-  //  Строка 2:  (пусто)
-  //  Строка 3:  Заголовки
-  //  Строки 4+: Данные
-  //  Строка N+1: Итого записей
+  // ── Структура листа (профессиональная):
+  //   Row 0:  СКЛАД MONE  (большой синий баннер)
+  //   Row 1:  Отчёт по остаткам — <Филиал>
+  //   Row 2:  (пусто)
+  //   Row 3:  Сформировано: 12 мая 2026, 14:30
+  //   Row 4:  Период: <первая-последняя даты>
+  //   Row 5:  (пусто)
+  //   Row 6:  KPI: Всего отчётов | Общее кол-во | Недостачи (3 ячейки)
+  //   Row 7:  KPI значения
+  //   Row 8:  (пусто)
+  //   Row 9:  Заголовки таблицы
+  //   Row 10+: Данные
+  //   Row N+1 (пустая)
+  //   Row N+2: ИТОГО
+
+  // Период
+  const dates = list.map(p => p.ts).sort((a, b) => a - b);
+  const periodFrom = new Date(dates[0]).toLocaleDateString('ru-RU');
+  const periodTo   = new Date(dates[dates.length - 1]).toLocaleDateString('ru-RU');
+  const periodStr = periodFrom === periodTo ? periodFrom : `${periodFrom} — ${periodTo}`;
+
   const wsData = [
-    ['Склад Mone — Отчёт по остаткам'],
-    [`Сформировано: ${docDate}`],
+    ['СКЛАД MONE'],                                                                       // 0
+    [`Отчёт по остаткам — ${branchTitle}`],                                               // 1
+    [],                                                                                   // 2
+    [`Сформировано: ${docDate} в ${docTime}`],                                            // 3
+    [`Период: ${periodStr}`],                                                             // 4
+    [],                                                                                   // 5
+    ['Всего отчётов', '', 'Общее количество', '', 'Недостачи', '', '', '', '', ''],       // 6 (KPI заголовки)
+    [list.length, '', `${totalQty} шт`, '', missCount > 0 ? `${missCount} × ${totalMiss} шт` : '0', '', '', '', '', ''], // 7 (KPI значения)
+    [],                                                                                   // 8
+    header,                                                                               // 9
+    ...rows,                                                                              // 10+
     [],
-    header,
-    ...rows,
-    [],
-    [`Всего записей: ${list.length}`],
+    ['', '', '', 'ИТОГО:', `${list.length} отчётов`, totalTarget || '', totalQty, totalMiss > 0 ? `-${totalMiss}` : '0', '', ''],
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(wsData);
-  const lastCol = header.length - 1;
-  const headerRow = 3;          // 0-based индекс строки заголовков
-  const dataStart = headerRow + 1;
-  const dataEnd   = dataStart + rows.length - 1;
-  const totalRow  = dataEnd + 2;
 
-  // Объединение ячеек для шапки документа
+  const titleRow   = 0;
+  const subtitleRow= 1;
+  const metaRow1   = 3;
+  const metaRow2   = 4;
+  const kpiLabelRow= 6;
+  const kpiValueRow= 7;
+  const headerRow  = 9;
+  const dataStart  = headerRow + 1;
+  const dataEnd    = dataStart + rows.length - 1;
+  const totalRow   = dataEnd + 2;
+
+  // ── Объединения ячеек
   ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: lastCol } }, // название
-    { s: { r: 1, c: 0 }, e: { r: 1, c: lastCol } }, // дата
-    { s: { r: totalRow, c: 0 }, e: { r: totalRow, c: lastCol } }, // итого
+    { s: { r: titleRow,    c: 0 }, e: { r: titleRow,    c: lastCol } }, // СКЛАД MONE
+    { s: { r: subtitleRow, c: 0 }, e: { r: subtitleRow, c: lastCol } }, // подзаголовок
+    { s: { r: metaRow1,    c: 0 }, e: { r: metaRow1,    c: lastCol } }, // сформировано
+    { s: { r: metaRow2,    c: 0 }, e: { r: metaRow2,    c: lastCol } }, // период
+    // KPI: 3 блока по 3 ячейки (с пустой между)
+    { s: { r: kpiLabelRow, c: 0 }, e: { r: kpiLabelRow, c: 1 } },
+    { s: { r: kpiLabelRow, c: 2 }, e: { r: kpiLabelRow, c: 4 } },
+    { s: { r: kpiLabelRow, c: 5 }, e: { r: kpiLabelRow, c: 9 } },
+    { s: { r: kpiValueRow, c: 0 }, e: { r: kpiValueRow, c: 1 } },
+    { s: { r: kpiValueRow, c: 2 }, e: { r: kpiValueRow, c: 4 } },
+    { s: { r: kpiValueRow, c: 5 }, e: { r: kpiValueRow, c: 9 } },
   ];
 
-  // Ширина колонок
+  // ── Ширина колонок
   ws['!cols'] = [
     { wch: 5  }, // №
     { wch: 12 }, // Дата
     { wch: 8  }, // Время
     { wch: 14 }, // Филиал
-    { wch: 34 }, // Товар
+    { wch: 36 }, // Товар
     { wch: 9  }, // Норма
     { wch: 9  }, // Факт
     { wch: 14 }, // Расхождение
     { wch: 22 }, // Сотрудник
-    { wch: 40 }, // Комментарий
+    { wch: 38 }, // Комментарий
   ];
 
-  // Высоты строк
+  // ── Высоты строк
   ws['!rows'] = [];
-  ws['!rows'][0] = { hpt: 28 }; // заголовок документа
-  ws['!rows'][1] = { hpt: 18 }; // дата
-  ws['!rows'][2] = { hpt: 8  }; // отступ
-  ws['!rows'][headerRow] = { hpt: 26 }; // заголовок таблицы
+  ws['!rows'][titleRow]    = { hpt: 40 }; // большой баннер
+  ws['!rows'][subtitleRow] = { hpt: 24 };
+  ws['!rows'][2]           = { hpt: 6  };
+  ws['!rows'][metaRow1]    = { hpt: 16 };
+  ws['!rows'][metaRow2]    = { hpt: 16 };
+  ws['!rows'][5]           = { hpt: 12 };
+  ws['!rows'][kpiLabelRow] = { hpt: 20 };
+  ws['!rows'][kpiValueRow] = { hpt: 32 };
+  ws['!rows'][8]           = { hpt: 8  };
+  ws['!rows'][headerRow]   = { hpt: 28 };
 
-  // ── Стили
-  // Шапка документа (строка 0)
-  const titleRef = XLSX.utils.encode_cell({ r: 0, c: 0 });
-  if (ws[titleRef]) {
-    ws[titleRef].s = {
-      font: { bold: true, sz: 16, color: { rgb: '1F2937' } },
-      alignment: { horizontal: 'left', vertical: 'center' },
-      fill: { fgColor: { rgb: 'FFFFFF' } },
-    };
-  }
-  // Дата (строка 1)
-  const dateRef = XLSX.utils.encode_cell({ r: 1, c: 0 });
-  if (ws[dateRef]) {
-    ws[dateRef].s = {
-      font: { sz: 10, color: { rgb: '6B7280' }, italic: true },
-      alignment: { horizontal: 'left', vertical: 'center' },
-      fill: { fgColor: { rgb: 'FFFFFF' } },
-    };
+  // ── СТИЛИ
+
+  // Цвета:
+  const COLOR_BRAND_DARK   = '0B2545'; // тёмно-синий (заголовок)
+  const COLOR_BRAND        = '1877F2'; // синий бренд
+  const COLOR_HEADER       = '1E293B'; // тёмно-серый для заголовков таблицы
+  const COLOR_WHITE        = 'FFFFFF';
+  const COLOR_TEXT         = '111827';
+  const COLOR_TEXT_LIGHT   = '6B7280';
+  const COLOR_ZEBRA        = 'F8FAFC';
+  const COLOR_MISS_BG      = 'FEE2E2';
+  const COLOR_MISS_TEXT    = 'B91C1C';
+  const COLOR_BORDER       = 'CBD5E1';
+  const COLOR_BORDER_LIGHT = 'E2E8F0';
+  const COLOR_KPI_BG       = 'EFF6FF';
+  const COLOR_KPI_BORDER   = 'BFDBFE';
+  const COLOR_TOTAL_BG     = 'F1F5F9';
+
+  // Заполняем все ячейки в строках 0..totalRow чтобы стили применились
+  // (даже пустые — без этого Excel не применит fill)
+  for (let R = 0; R <= totalRow; R++) {
+    for (let C = 0; C <= lastCol; C++) {
+      const ref = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+    }
   }
 
-  // Заголовки таблицы (строка 3)
+  // 1) СКЛАД MONE (большой синий баннер)
   for (let C = 0; C <= lastCol; C++) {
-    const cellRef = XLSX.utils.encode_cell({ r: headerRow, c: C });
-    if (!ws[cellRef]) ws[cellRef] = { t: 's', v: header[C] };
-    ws[cellRef].s = {
-      font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 },
-      fill: { fgColor: { rgb: '1F2937' } },
-      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    const ref = XLSX.utils.encode_cell({ r: titleRow, c: C });
+    ws[ref].s = {
+      font: { bold: true, sz: 22, color: { rgb: COLOR_WHITE }, name: 'Arial' },
+      fill: { patternType: 'solid', fgColor: { rgb: COLOR_BRAND } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+    };
+  }
+
+  // 2) Подзаголовок (тёмно-синий)
+  for (let C = 0; C <= lastCol; C++) {
+    const ref = XLSX.utils.encode_cell({ r: subtitleRow, c: C });
+    ws[ref].s = {
+      font: { bold: true, sz: 14, color: { rgb: COLOR_WHITE }, name: 'Arial' },
+      fill: { patternType: 'solid', fgColor: { rgb: COLOR_BRAND_DARK } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+    };
+  }
+
+  // 3) Meta (сформировано / период)
+  [metaRow1, metaRow2].forEach(R => {
+    for (let C = 0; C <= lastCol; C++) {
+      const ref = XLSX.utils.encode_cell({ r: R, c: C });
+      ws[ref].s = {
+        font: { sz: 10, color: { rgb: COLOR_TEXT_LIGHT }, italic: true },
+        alignment: { horizontal: 'left', vertical: 'center', indent: 1 },
+      };
+    }
+  });
+
+  // 4) KPI labels
+  for (let C = 0; C <= lastCol; C++) {
+    const ref = XLSX.utils.encode_cell({ r: kpiLabelRow, c: C });
+    ws[ref].s = {
+      font: { bold: true, sz: 10, color: { rgb: COLOR_TEXT_LIGHT }, name: 'Arial' },
+      fill: { patternType: 'solid', fgColor: { rgb: COLOR_KPI_BG } },
+      alignment: { horizontal: 'center', vertical: 'center' },
       border: {
-        top:    { style: 'medium', color: { rgb: '1F2937' } },
-        bottom: { style: 'medium', color: { rgb: '1F2937' } },
-        left:   { style: 'thin',   color: { rgb: '4B5563' } },
-        right:  { style: 'thin',   color: { rgb: '4B5563' } },
+        top:    { style: 'medium', color: { rgb: COLOR_KPI_BORDER } },
+        left:   { style: 'medium', color: { rgb: COLOR_KPI_BORDER } },
+        right:  { style: 'medium', color: { rgb: COLOR_KPI_BORDER } },
+      },
+    };
+  }
+  // 5) KPI values (большие цифры)
+  for (let C = 0; C <= lastCol; C++) {
+    const ref = XLSX.utils.encode_cell({ r: kpiValueRow, c: C });
+    const isMissCol = C >= 5;
+    ws[ref].s = {
+      font: {
+        bold: true, sz: 18,
+        color: { rgb: isMissCol && missCount > 0 ? COLOR_MISS_TEXT : COLOR_BRAND_DARK },
+        name: 'Arial',
+      },
+      fill: { patternType: 'solid', fgColor: { rgb: COLOR_KPI_BG } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: {
+        bottom: { style: 'medium', color: { rgb: COLOR_KPI_BORDER } },
+        left:   { style: 'medium', color: { rgb: COLOR_KPI_BORDER } },
+        right:  { style: 'medium', color: { rgb: COLOR_KPI_BORDER } },
       },
     };
   }
 
-  // Строки данных
+  // 6) Заголовки таблицы
+  for (let C = 0; C <= lastCol; C++) {
+    const ref = XLSX.utils.encode_cell({ r: headerRow, c: C });
+    ws[ref].s = {
+      font: { bold: true, sz: 11, color: { rgb: COLOR_WHITE }, name: 'Arial' },
+      fill: { patternType: 'solid', fgColor: { rgb: COLOR_HEADER } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+      border: {
+        top:    { style: 'medium', color: { rgb: COLOR_HEADER } },
+        bottom: { style: 'medium', color: { rgb: COLOR_HEADER } },
+        left:   { style: 'thin',   color: { rgb: '475569' } },
+        right:  { style: 'thin',   color: { rgb: '475569' } },
+      },
+    };
+  }
+
+  // 7) Строки данных
+  const centerCols = [0, 1, 2, 5, 6, 7]; // №, Дата, Время, Норма, Факт, Расхождение
+  const branchCol = 3;
   for (let i = 0; i < rows.length; i++) {
     const R = dataStart + i;
-    const isMiss = typeof rows[i][7] === 'string' && rows[i][7].startsWith('-');
+    const diffVal = rows[i][7];
+    const isMiss = typeof diffVal === 'string' && diffVal.startsWith('-');
     const isZebra = i % 2 === 1;
-    const fillRgb = isMiss ? 'FFF1F1' : (isZebra ? 'F9FAFB' : 'FFFFFF');
+    const baseFill = isMiss ? COLOR_MISS_BG : (isZebra ? COLOR_ZEBRA : COLOR_WHITE);
 
     for (let C = 0; C <= lastCol; C++) {
-      const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-      if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
-
-      // Колонки 0(№), 1(Дата), 2(Время), 5(Норма), 6(Факт), 7(Расхождение) — центр
-      const centerCols = [0, 1, 2, 5, 6, 7];
+      const ref = XLSX.utils.encode_cell({ r: R, c: C });
       const isDiff = C === 7;
-      ws[cellRef].s = {
+      const isBranch = C === branchCol;
+      ws[ref].s = {
         font: {
           sz: 10,
-          color: { rgb: isMiss && isDiff ? 'B91C1C' : '111827' },
-          bold: isMiss && isDiff,
+          name: 'Arial',
+          color: { rgb: isMiss && isDiff ? COLOR_MISS_TEXT : COLOR_TEXT },
+          bold: (isMiss && isDiff) || isBranch,
         },
-        fill: { fgColor: { rgb: fillRgb } },
+        fill: { patternType: 'solid', fgColor: { rgb: baseFill } },
         alignment: {
           vertical: 'center',
           wrapText: true,
           horizontal: centerCols.includes(C) ? 'center' : 'left',
+          indent: centerCols.includes(C) ? 0 : 1,
         },
         border: {
-          top:    { style: 'thin', color: { rgb: 'E5E7EB' } },
-          bottom: { style: 'thin', color: { rgb: 'E5E7EB' } },
-          left:   { style: 'thin', color: { rgb: 'E5E7EB' } },
-          right:  { style: 'thin', color: { rgb: 'E5E7EB' } },
+          top:    { style: 'thin', color: { rgb: COLOR_BORDER_LIGHT } },
+          bottom: { style: 'thin', color: { rgb: COLOR_BORDER_LIGHT } },
+          left:   { style: 'thin', color: { rgb: COLOR_BORDER_LIGHT } },
+          right:  { style: 'thin', color: { rgb: COLOR_BORDER_LIGHT } },
         },
       };
     }
   }
 
-  // Итоговая строка
-  const totalRef = XLSX.utils.encode_cell({ r: totalRow, c: 0 });
-  if (ws[totalRef]) {
-    ws[totalRef].s = {
-      font: { bold: true, sz: 11, color: { rgb: '1F2937' } },
-      alignment: { horizontal: 'right', vertical: 'center' },
-      fill: { fgColor: { rgb: 'F3F4F6' } },
+  // 8) Итоговая строка
+  for (let C = 0; C <= lastCol; C++) {
+    const ref = XLSX.utils.encode_cell({ r: totalRow, c: C });
+    const isDiff = C === 7;
+    const isLabel = C === 3;
+    ws[ref].s = {
+      font: {
+        bold: true,
+        sz: 11,
+        name: 'Arial',
+        color: { rgb: isDiff && totalMiss > 0 ? COLOR_MISS_TEXT : COLOR_BRAND_DARK },
+      },
+      fill: { patternType: 'solid', fgColor: { rgb: COLOR_TOTAL_BG } },
+      alignment: {
+        vertical: 'center',
+        horizontal: isLabel ? 'right' : (centerCols.includes(C) ? 'center' : 'left'),
+        indent: isLabel ? 0 : (centerCols.includes(C) ? 0 : 1),
+      },
       border: {
-        top: { style: 'medium', color: { rgb: '1F2937' } },
+        top:    { style: 'medium', color: { rgb: COLOR_HEADER } },
+        bottom: { style: 'medium', color: { rgb: COLOR_HEADER } },
       },
     };
   }
 
-  // Закрепить шапку при прокрутке
+  // ── Закрепить шапку при прокрутке (включая бренд-баннер и KPI)
   ws['!freeze'] = { xSplit: 0, ySplit: headerRow + 1 };
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: headerRow, c: 0 },
+      e: { r: dataEnd,   c: lastCol },
+    }),
+  };
 
-  // Создаём книгу
+  // ── Создаём книгу
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Отчёт');
+  // Имя листа отражает филиал
+  const sheetName = branchFilter === 'all'
+    ? 'Все филиалы'
+    : (BRANCH_LABELS[branchFilter] || 'Отчёт').slice(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-  // Имя файла с датой
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('ru-RU').replaceAll('.', '-');
-  const fileName = `Отчёт_по_остаткам_${dateStr}.xlsx`;
+  // ── Имя файла
+  const dateStr = new Date().toLocaleDateString('ru-RU').replaceAll('.', '-');
+  const branchSlug = branchFilter === 'all' ? 'Все_филиалы' : (BRANCH_LABELS[branchFilter] || 'Отчёт').replace(/\s+/g, '_');
+  const fileName = `Mone_Отчёт_${branchSlug}_${dateStr}.xlsx`;
 
   XLSX.writeFile(wb, fileName);
   showToast(`Скачано: ${fileName}`, 'success');
