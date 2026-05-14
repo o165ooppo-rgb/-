@@ -3662,11 +3662,13 @@ body.role-staff .drawer-item--branch { display: none !important; }
   height: 18px;
 }
 
-/* Когда фото для отчёта уже выбрано — кнопка зелёная с галочкой */
-.product-card.has-photo .product-card__camera-btn {
+/* Когда есть фото-отчёт за последние 24 часа — иконка камеры зелёная с галочкой.
+   Класс has-photo-recent ставится в JS на основе данных из state.proofs,
+   поэтому переживает перезагрузку страницы. */
+.product-card.has-photo-recent .product-card__camera-btn {
   background: var(--success);
 }
-.product-card.has-photo .product-card__camera-btn::after {
+.product-card.has-photo-recent .product-card__camera-btn::after {
   content: '✓';
   position: absolute;
   bottom: -4px;
@@ -4371,8 +4373,8 @@ body.role-staff .drawer-item--branch { display: none !important; }
 }
 .product-card__body { flex: 1; }
 
-/* Иконка камеры подсвечена зелёным, когда фото прикреплено */
-.product-card.has-photo .product-card__camera-btn {
+/* Иконка камеры подсвечена зелёным когда есть фото-отчёт за 24 часа */
+.product-card.has-photo-recent .product-card__camera-btn {
   background: var(--success);
   box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.25);
 }
@@ -4873,6 +4875,11 @@ body.role-staff .drawer-item--branch { display: none !important; }
   color: var(--text-secondary, #65676b);
   font-variant-numeric: tabular-nums;
 }
+.product-card__yesterday-branch {
+  font-size: 11px;
+  color: var(--text-muted, #8a8d91);
+  font-weight: 500;
+}
 
 /* ============================================================
    V7: Поиск в шапке (toolbar) + анимация has-photo
@@ -4946,22 +4953,476 @@ body.role-staff .drawer-item--branch { display: none !important; }
   .header-search-input { font-size: 14px; height: 36px; }
 }
 
-/* ---------- Анимация has-photo на карточке (зелёная галочка кратко) ---------- */
-.product-card.has-photo::after {
-  content: '';
+/* ---------- Тонкая анимация при появлении фото за 24 часа ---------- */
+.product-card.has-photo-recent .product-card__camera-btn {
+  animation: photoBadgeAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes photoBadgeAppear {
+  0%   { transform: scale(0.7); }
+  60%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+
+/* ============================================================
+   V8: Галерея — режим выбора (iPhone-style)
+============================================================ */
+
+/* Кнопка «Выбрать» в шапке галереи */
+.gallery-select-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 8px 14px;
+  background: var(--surface, #fff);
+  border: 1.5px solid var(--border, #dadde1);
+  border-radius: 999px;
+  color: var(--text-primary, #1c1e21);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.gallery-select-btn:hover {
+  border-color: var(--accent, #1877F2);
+  color: var(--accent, #1877F2);
+}
+.gallery-select-btn:active { transform: scale(0.96); }
+.gallery-select-btn.active {
+  background: var(--accent, #1877F2);
+  border-color: var(--accent, #1877F2);
+  color: #fff;
+}
+.gallery-select-btn svg { width: 16px; height: 16px; }
+
+/* Карточка в режиме выбора */
+.gallery-card {
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+.gallery-card__check {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   width: 28px;
   height: 28px;
-  background: #22c55e url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>") center/16px no-repeat;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid #fff;
   border-radius: 50%;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
-  z-index: 10;
-  animation: photoSentPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 5;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
-@keyframes photoSentPop {
-  0%   { transform: scale(0); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+.gallery-card__check svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* В режиме выбора показываем индикатор на всех карточках */
+.gallery-card--selecting .gallery-card__check {
+  display: inline-flex;
+}
+.gallery-card--selecting {
+  transition: transform 0.15s ease;
+}
+
+/* Выбранная карточка: синяя обводка, галочка */
+.gallery-card--selected .gallery-card__check {
+  background: var(--accent, #1877F2);
+  color: #fff;
+  transform: scale(1.05);
+}
+.gallery-card--selected .gallery-card__image-wrap {
+  box-shadow: 0 0 0 3px var(--accent, #1877F2);
+  border-radius: 12px;
+}
+.gallery-card--selected {
+  transform: scale(0.97);
+}
+
+/* Карточка реагирует на тач/долгий тап */
+.gallery-card:active {
+  transform: scale(0.985);
+}
+
+/* В режиме выбора скрываем filters сверху, чтобы не загромождать */
+body.gallery-selecting .reports-filters { opacity: 0.5; pointer-events: none; }
+
+/* Отступ снизу — чтобы actions-bar не закрывал последние карточки */
+body.gallery-selecting #pageGallery {
+  padding-bottom: 96px;
+}
+
+/* ---------- Нижняя плавающая панель действий ---------- */
+.gallery-actions-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+  transform: translateY(120%);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.gallery-actions-bar.active {
+  display: flex;
+  transform: translateY(0);
+  animation: slideUpBar 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes slideUpBar {
+  from { transform: translateY(120%); }
+  to   { transform: translateY(0); }
+}
+
+.gallery-actions-bar__close {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2, #f0f2f5);
+  border: none;
+  border-radius: 50%;
+  color: var(--text-secondary, #65676b);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+.gallery-actions-bar__close:hover { background: #e4e6eb; }
+.gallery-actions-bar__close svg { width: 14px; height: 14px; }
+
+.gallery-actions-bar__count {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #1c1e21);
+  text-align: center;
+  letter-spacing: 0.1px;
+  min-width: 80px;
+}
+
+.gallery-actions-bar__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 14px;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.gallery-actions-bar__btn svg { width: 15px; height: 15px; }
+.gallery-actions-bar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.gallery-actions-bar__btn:not(:disabled):active {
+  transform: scale(0.95);
+}
+.gallery-actions-bar__btn--select-all {
+  background: var(--surface2, #f0f2f5);
+  color: var(--text-primary, #1c1e21);
+}
+.gallery-actions-bar__btn--select-all:not(:disabled):hover {
+  background: #e4e6eb;
+}
+.gallery-actions-bar__btn--share {
+  background: #229ED9; /* Telegram-цвет */
+  color: #fff;
+}
+.gallery-actions-bar__btn--share:not(:disabled):hover {
+  background: #1e8ec3;
+}
+.gallery-actions-bar__btn--delete {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.gallery-actions-bar__btn--delete:not(:disabled):hover {
+  background: #fecaca;
+}
+
+/* Мобильная версия: компактнее */
+@media (max-width: 480px) {
+  .gallery-actions-bar { gap: 6px; padding: 8px 10px; left: 8px; right: 8px; }
+  .gallery-actions-bar__btn { padding: 8px 11px; font-size: 12px; gap: 4px; }
+  .gallery-actions-bar__btn--share span,
+  .gallery-actions-bar__btn--delete span { display: none; } /* только иконки */
+  .gallery-actions-bar__btn svg { width: 16px; height: 16px; }
+  .gallery-actions-bar__btn--select-all { padding: 8px 12px; }
+  .gallery-actions-bar__count { font-size: 13px; min-width: 0; }
+}
+
+/* page-header нужен flex чтобы кнопка справа встала */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.page-header__text { flex: 1; min-width: 0; }
+
+/* ============================================================
+   V8: Excel date picker модалка
+============================================================ */
+.modal--date-picker {
+  max-width: 460px;
+  width: 100%;
+  padding: 24px 22px 20px;
+}
+.date-picker__title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary, #1c1e21);
+  margin-bottom: 4px;
+  letter-spacing: -0.2px;
+}
+.date-picker__sub {
+  font-size: 13px;
+  color: var(--text-secondary, #65676b);
+  margin-bottom: 18px;
+}
+.date-picker__presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.date-preset {
+  padding: 10px 8px;
+  background: var(--surface2, #f0f2f5);
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #1c1e21);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  font-family: inherit;
+}
+.date-preset:hover {
+  background: #e4e6eb;
+}
+.date-preset.active {
+  background: var(--accent, #1877F2);
+  border-color: var(--accent, #1877F2);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(24, 119, 242, 0.25);
+}
+
+.date-picker__custom {
+  border-top: 1px solid var(--border-light, #ebedf0);
+  padding-top: 14px;
+  margin-bottom: 14px;
+}
+.date-picker__custom-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary, #65676b);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.date-picker__range {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.date-picker__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.date-picker__field span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #65676b);
+  letter-spacing: 0.3px;
+}
+.date-picker__field input[type="date"] {
+  height: 38px;
+  padding: 0 12px;
+  background: #fff;
+  border: 1.5px solid var(--border, #dadde1);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #1c1e21);
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+  min-width: 0;
+}
+.date-picker__field input[type="date"]:focus {
+  border-color: var(--accent, #1877F2);
+}
+
+.date-picker__info {
+  padding: 12px 14px;
+  background: var(--accent-subtle, #ebf2ff);
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--text-secondary, #65676b);
+  margin-bottom: 16px;
+  text-align: center;
+}
+.date-picker__info strong {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent, #1877F2);
+  margin: 0 4px;
+}
+
+.date-picker__footer {
+  display: flex;
+  gap: 8px;
+}
+.date-picker__footer button {
+  flex: 1;
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.date-picker__footer .btn-cancel {
+  background: var(--surface2, #f0f2f5);
+  color: var(--text-primary, #1c1e21);
+}
+.date-picker__footer .btn-cancel:hover { background: #e4e6eb; }
+.date-picker__footer .btn-save {
+  background: var(--accent, #1877F2);
+  color: #fff;
+}
+.date-picker__footer .btn-save:hover { background: var(--accent-hover, #166fe5); }
+.date-picker__footer .btn-save svg { width: 16px; height: 16px; }
+
+@media (max-width: 380px) {
+  .modal--date-picker { padding: 20px 16px 16px; }
+  .date-picker__presets { grid-template-columns: repeat(3, 1fr); }
+  .date-preset { padding: 9px 6px; font-size: 11px; }
+}
+
+
+/* ============================================================
+   V9: Блок выбора филиала в Excel-модалке
+============================================================ */
+.date-picker__branches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.date-picker__branches .date-preset {
+  padding: 9px 8px;
+}
+
+/* На мобильном — 2 колонки чтобы не было сильно узко */
+@media (max-width: 380px) {
+  .date-picker__branches { grid-template-columns: repeat(2, 1fr); }
+}
+
+
+/* ============================================================
+   V10: PWA — кнопка "Установить на телефон" (стиль drawer-item уже есть)
+============================================================ */
+/* Подсказка в bottom-sheet выбора фото (когда фото обязательно для смены количества) */
+.photo-choice-sheet__hint {
+  font-size: 13px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fef3c7;
+  padding: 9px 12px;
+  border-radius: 8px;
+  margin: 8px 16px 14px;
+  text-align: center;
+  line-height: 1.35;
+  letter-spacing: 0.1px;
+}
+.photo-choice-sheet__hint:empty {
+  display: none;
+}
+
+/* ============================================================
+   V10: Вкладка "Данные" в панели менеджера — бэкап и очистка
+============================================================ */
+.data-section {
+  padding: 16px 14px;
+  background: var(--surface2, #f0f2f5);
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+.data-section__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary, #1c1e21);
+  margin-bottom: 4px;
+  letter-spacing: -0.1px;
+}
+.data-section__desc {
+  font-size: 12px;
+  color: var(--text-secondary, #65676b);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+.data-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border: 1.5px solid var(--border, #dadde1);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1c1e21);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.data-btn:hover {
+  border-color: var(--accent, #1877F2);
+  color: var(--accent, #1877F2);
+}
+.data-btn:active { transform: scale(0.98); }
+.data-btn svg { width: 16px; height: 16px; }
+.data-btn--primary {
+  background: var(--accent, #1877F2);
+  border-color: var(--accent, #1877F2);
+  color: #fff;
+}
+.data-btn--primary:hover {
+  background: var(--accent-hover, #166fe5);
+  border-color: var(--accent-hover, #166fe5);
+  color: #fff;
 }
 

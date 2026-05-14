@@ -6,10 +6,18 @@
   <meta name="theme-color" content="#1877F2" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Склад Mone" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="Склад Mone" />
   <meta name="format-detection" content="telephone=no" />
   <meta name="description" content="Склад Mone — Управление остатками товаров по филиалам" />
   <title>Склад Mone — Управление остатками</title>
+
+  <!-- PWA: manifest + иконка для iOS -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%231877F2'/%3E%3Cpath d='M40 56h100M40 90h100M40 124h62' stroke='white' stroke-width='13' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='10' fill='%231877F2'/%3E%3Cpath d='M8 10h20M8 18h20M8 26h12' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E" />
+
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -97,6 +105,7 @@
       <div class="manager-tabs">
         <button class="manager-tab active" data-tab="users">Аккаунты</button>
         <button class="manager-tab" data-tab="logs">Журнал</button>
+        <button class="manager-tab" data-tab="data">Данные</button>
       </div>
 
       <div class="manager-tab-content" id="tabUsers">
@@ -115,6 +124,56 @@
           <button class="manager-clear-logs-btn" id="clearLogsBtn">Очистить</button>
         </div>
         <div class="manager-logs-list" id="managerLogsList"></div>
+      </div>
+
+      <div class="manager-tab-content" id="tabData" style="display:none">
+        <div class="manager-users-header">
+          <span class="manager-section-label">Резервная копия и очистка</span>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section__title">Скачать резервную копию</div>
+          <div class="data-section__desc">
+            Сохранит все товары, аккаунты, категории и фото-отчёты в один JSON-файл.
+            Если что-то случится — можно восстановить.
+          </div>
+          <button class="data-btn data-btn--primary" id="backupDownloadBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Скачать JSON
+          </button>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section__title">Восстановить из копии</div>
+          <div class="data-section__desc">
+            Загрузит JSON-файл и заменит текущие данные. Существующие данные будут утеряны — делайте бэкап перед восстановлением.
+          </div>
+          <input type="file" id="backupRestoreInput" accept=".json,application/json" style="display:none"/>
+          <button class="data-btn" id="backupRestoreBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Загрузить JSON
+          </button>
+        </div>
+
+        <div class="data-section">
+          <div class="data-section__title">Очистка старых фото</div>
+          <div class="data-section__desc">
+            Фото-отчёты автоматически удаляются после 60 дней — это экономит место в базе. Можно почистить вручную прямо сейчас.
+          </div>
+          <button class="data-btn" id="cleanupOldProofsBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
+            </svg>
+            <span id="cleanupBtnLabel">Удалить фото старше 60 дней</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -340,6 +399,14 @@
             <span class="drawer-item__label">Панель менеджера</span>
           </span>
         </button>
+
+        <button class="drawer-item" id="installAppBtn" style="display:none">
+          <span class="drawer-item__icon">↓</span>
+          <span class="drawer-item__text">
+            <span class="drawer-item__label">Установить на телефон</span>
+            <span class="drawer-item__sub">Как обычное приложение</span>
+          </span>
+        </button>
       </div>
 
       <div class="drawer-footer">
@@ -542,6 +609,13 @@
         <h2 class="page-header__title">Галерея фото товаров</h2>
         <p class="page-header__sub" id="galleryPageSub">Все фотографии товаров</p>
       </div>
+      <button class="gallery-select-btn" id="gallerySelectBtn" type="button" title="Выбрать">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 11 12 14 22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        <span>Выбрать</span>
+      </button>
     </div>
 
     <div class="reports-filters" id="galleryFilters" style="display:none">
@@ -561,6 +635,31 @@
       </svg>
       <p>Пока нет фотографий</p>
       <span>Загрузите фото товара — оно появится здесь</span>
+    </div>
+
+    <!-- Плавающая нижняя панель действий в режиме выбора (iOS-style) -->
+    <div class="gallery-actions-bar" id="galleryActionsBar">
+      <button class="gallery-actions-bar__close" id="gallerySelectCancel" type="button" aria-label="Отмена">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="gallery-actions-bar__count" id="gallerySelectCount">Выбрано: 0</div>
+      <button class="gallery-actions-bar__btn gallery-actions-bar__btn--select-all" id="gallerySelectAll" type="button">
+        Все
+      </button>
+      <button class="gallery-actions-bar__btn gallery-actions-bar__btn--share" id="gallerySelectShare" type="button" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+        </svg>
+        <span>Telegram</span>
+      </button>
+      <button class="gallery-actions-bar__btn gallery-actions-bar__btn--delete" id="gallerySelectDelete" type="button" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+        <span>Удалить</span>
+      </button>
     </div>
   </main>
 
@@ -927,6 +1026,69 @@
     </div>
   </div>
 
+  <!-- ===== EXCEL DATE PICKER MODAL ===== -->
+  <div class="modal-overlay" id="excelDateModal">
+    <div class="modal modal--date-picker">
+      <button class="modal__close" id="excelDateClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <h2 class="date-picker__title">Скачать Excel-отчёт</h2>
+      <p class="date-picker__sub" id="excelDateSub">Выберите период и филиал</p>
+
+      <!-- Быстрые пресеты по дате -->
+      <div class="date-picker__custom-title">Период:</div>
+      <div class="date-picker__presets">
+        <button class="date-preset" data-preset="today">Сегодня</button>
+        <button class="date-preset" data-preset="yesterday">Вчера</button>
+        <button class="date-preset" data-preset="week">7 дней</button>
+        <button class="date-preset" data-preset="month">30 дней</button>
+        <button class="date-preset" data-preset="all">Всё время</button>
+      </div>
+
+      <!-- Свой диапазон -->
+      <div class="date-picker__custom">
+        <div class="date-picker__custom-title">Свой диапазон:</div>
+        <div class="date-picker__range">
+          <label class="date-picker__field">
+            <span>С</span>
+            <input type="date" id="excelDateFrom"/>
+          </label>
+          <label class="date-picker__field">
+            <span>По</span>
+            <input type="date" id="excelDateTo"/>
+          </label>
+        </div>
+      </div>
+
+      <!-- Выбор филиала прямо в модалке -->
+      <div class="date-picker__custom">
+        <div class="date-picker__custom-title">Филиал:</div>
+        <div class="date-picker__branches" id="excelBranchPicker">
+          <button class="date-preset active" data-xbranch="all">Все филиалы</button>
+          <button class="date-preset" data-xbranch="branch1">Сибирский</button>
+          <button class="date-preset" data-xbranch="branch2">Фреско</button>
+          <button class="date-preset" data-xbranch="branch3">Гелион</button>
+        </div>
+      </div>
+
+      <!-- Информация о найденных отчётах -->
+      <div class="date-picker__info" id="excelDateInfo">
+        Найдено отчётов: <strong id="excelDateCount">0</strong>
+      </div>
+
+      <div class="date-picker__footer">
+        <button class="btn-cancel" id="excelDateCancel">Отмена</button>
+        <button class="btn-save" id="excelDateDownload">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Скачать
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ===== CONFIRM DELETE PRODUCT ===== -->
   <div class="modal-overlay" id="confirmModal">
     <div class="modal modal--confirm">
@@ -970,6 +1132,7 @@
     <div class="photo-choice-sheet__panel">
       <div class="photo-choice-sheet__handle"></div>
       <div class="photo-choice-sheet__title">Откуда взять фото?</div>
+      <div class="photo-choice-sheet__hint"></div>
       <button class="photo-choice-sheet__btn" id="photoChoiceCamera">
         <span class="photo-choice-sheet__icon">●</span>
         <span class="photo-choice-sheet__text">

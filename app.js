@@ -182,6 +182,15 @@ const state = {
   expandedProductIds: new Set(),       // id товаров, у которых раскрыта inline-панель
   inlinePhotos: new Map(),             // id → dataUrl (фото, прикреплённое в inline-панели)
   pendingPhotoForProductId: null,      // id товара, для которого сейчас выбираем фото
+  pendingQtyChange: null,              // {productId, newQty, originalQty, inputEl} — ожидающая смена цифры с фото
+  // ── Режим выбора в галерее (iPhone-style) ──
+  gallerySelectMode: false,            // включён ли режим выбора
+  gallerySelected: new Set(),          // id выбранных proof
+  // ── Excel экспорт по дате ──
+  excelDateMode: 'today',              // today | yesterday | week | month | all | custom
+  excelDateFrom: null,                 // YYYY-MM-DD
+  excelDateTo:   null,                 // YYYY-MM-DD
+  excelBranch:   'all',                // all | branch1 | branch2 | branch3 — выбор филиала в самой модалке
 };
 
 /* ===========================================================
@@ -318,6 +327,44 @@ function getCurrentInputQty(product, branch) {
   }
   // Ввод был вчера или раньше → новый день начинается с 0
   return 0;
+}
+
+/**
+ * Есть ли отчёт-фото (proof) для товара за последние 24 часа?
+ * Для сотрудника — только в его филиале.
+ * Для менеджера — в любом филиале (или в активном, если выбран конкретный).
+ */
+function hasRecentProof(productId, branch) {
+  if (!state.proofs || !state.proofs.length) return false;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - dayMs;
+  return state.proofs.some(p => {
+    if (p.productId !== productId) return false;
+    if (p.ts < cutoff) return false;
+    if (branch && branch !== 'all') {
+      if (p.branch !== branch) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Обновляет класс has-photo-recent на всех карточках товаров.
+ * Вызывается когда меняются proofs или каждые 5 минут (на случай если 24ч истекли).
+ */
+function refreshAllPhotoBadges() {
+  const cards = document.querySelectorAll('.product-card[data-id]');
+  if (!cards.length) {
+    // Если карточек ещё нет — делаем обычный ререндер
+    if (state.currentPage === 'products') renderAll();
+    return;
+  }
+  const branchForCheck = isStaff() ? userBranch() : (state.activeBranch === 'all' ? null : state.activeBranch);
+  cards.forEach(card => {
+    const id = card.dataset.id;
+    const recent = hasRecentProof(id, branchForCheck);
+    card.classList.toggle('has-photo-recent', recent);
+  });
 }
 
 function formatRelative(ts) {
@@ -524,12 +571,14 @@ function initFirebaseListeners() {
     saveLocal(PROOFS_CACHE, state.proofs);
     if (state.currentPage === 'gallery') renderGalleryPage();
     if (state.currentPage === 'reports') renderReportsPage();
-    renderAll(); // обновим карточки товаров (показ "последний отчёт")
+    // Обновляем зелёные галочки на карточках товаров — не делаем полный ререндер,
+    // только переключаем класс has-photo-recent.
+    refreshAllPhotoBadges();
   }, () => {
     state.proofs = loadLocal(PROOFS_CACHE) || [];
     if (state.currentPage === 'gallery') renderGalleryPage();
     if (state.currentPage === 'reports') renderReportsPage();
-    renderAll();
+    refreshAllPhotoBadges();
   });
 
   // Категории — слушают все пользователи (нужны для отображения и фильтров)
@@ -794,6 +843,7 @@ function enterApp() {
     initReportsEvents();
     initLightbox();
     initPhotoChoiceSheet();
+    initExcelDateModal();
     enterApp._initialized = true;
   }
 
@@ -805,6 +855,30 @@ function enterApp() {
   // Планируем срабатывание ровно в полночь — чтобы карточки обновились
   // и «Вчера: X шт» появилось, а инпуты сбросились в 0.
   scheduleMidnightRefresh();
+
+  // Каждые 5 минут обновляем зелёные галочки (на случай если 24 часа истекли,
+  // и «Вчера» (на случай если новый день только что наступил без срабатывания таймера).
+  scheduleBadgeRefresh();
+
+  // Автоочистка старых фото-отчётов — только для менеджера, не чаще раза в день.
+  // Если последняя очистка была меньше 24 часов назад — пропускаем.
+  if (isManager()) {
+    setTimeout(maybeAutoCleanupOldProofs, 8000); // ждём 8 секунд после входа чтобы proofs загрузились
+  }
+}
+
+const AUTO_CLEANUP_KEY = 'mone_last_auto_cleanup_v1';
+async function maybeAutoCleanupOldProofs() {
+  if (!isManager()) return;
+  const last = parseInt(localStorage.getItem(AUTO_CLEANUP_KEY) || '0', 10);
+  const dayMs = 24 * 60 * 60 * 1000;
+  if (last && (Date.now() - last) < dayMs) return; // запускали меньше суток назад
+
+  const removed = await cleanupOldProofs(false);
+  localStorage.setItem(AUTO_CLEANUP_KEY, String(Date.now()));
+  if (removed > 0) {
+    showToast(`Автоочистка: удалено ${removed} фото старше 60 дней`, 'success');
+  }
 }
 
 let _midnightTimer = null;
@@ -818,6 +892,15 @@ function scheduleMidnightRefresh() {
     if (state.currentPage === 'products') renderAll();
     scheduleMidnightRefresh(); // на следующий день
   }, ms);
+}
+
+let _badgeTimer = null;
+function scheduleBadgeRefresh() {
+  if (_badgeTimer) clearInterval(_badgeTimer);
+  // Каждые 5 минут — обновляем galочки has-photo-recent (24-часовое окно)
+  _badgeTimer = setInterval(() => {
+    if (state.currentPage === 'products') refreshAllPhotoBadges();
+  }, 5 * 60 * 1000);
 }
 
 async function handleLogout() {
@@ -928,9 +1011,18 @@ function initDrawer() {
   $('drawerBranchBtn').addEventListener('click', () => { close(); setTimeout(openBranchModal, 200); });
   $('drawerAddBtn').addEventListener('click',    () => { close(); setTimeout(() => openEditModal(null), 200); });
   $('drawerPrintBtn').addEventListener('click',  () => { close(); setTimeout(preparePrint, 200); });
-  $('drawerExcelBtn').addEventListener('click',  () => { close(); setTimeout(exportToExcel, 200); });
+  $('drawerExcelBtn').addEventListener('click',  () => { close(); setTimeout(openExcelDateModal, 200); });
   $('drawerManagerBtn').addEventListener('click',() => { close(); setTimeout(openManagerPanel, 200); });
+  $('installAppBtn').addEventListener('click',   () => { close(); setTimeout(triggerInstallPrompt, 200); });
   $('drawerLogoutBtn').addEventListener('click', () => { close(); setTimeout(handleLogout, 200); });
+
+  // iOS не вызывает beforeinstallprompt, но установка через «Поделиться → На экран Домой» возможна.
+  // Поэтому на iOS показываем кнопку всегда (если приложение уже не открыто как standalone).
+  const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isIOS && !isStandalone) {
+    $('installAppBtn').style.display = '';
+  }
 
   $('branchIndicator').addEventListener('click', () => { if (isManager()) openBranchModal(); });
 
@@ -1037,6 +1129,8 @@ function initManagerPanel() {
       const tabId = tab.dataset.tab;
       $('tabUsers').style.display = tabId === 'users' ? 'block' : 'none';
       $('tabLogs').style.display  = tabId === 'logs'  ? 'block' : 'none';
+      $('tabData').style.display  = tabId === 'data'  ? 'block' : 'none';
+      if (tabId === 'data') updateCleanupBtnLabel();
     });
   });
 
@@ -1046,6 +1140,12 @@ function initManagerPanel() {
     renderManagerLogs();
     showToast('Журнал очищен');
   });
+
+  // Резервная копия и очистка
+  $('backupDownloadBtn').addEventListener('click', downloadBackup);
+  $('backupRestoreBtn').addEventListener('click', () => $('backupRestoreInput').click());
+  $('backupRestoreInput').addEventListener('change', restoreBackup);
+  $('cleanupOldProofsBtn').addEventListener('click', () => cleanupOldProofs(true));
 
   $('userEditClose').addEventListener('click', () => closeOverlay($('userEditModal')));
   $('userEditModal').addEventListener('click', e => {
@@ -1687,27 +1787,50 @@ function renderAll() {
 
   // Поле количества на карточке сотрудника:
   // — клик не пробрасывается на карточку
-  // — при фокусе значение выделяется (можно сразу вводить новое число поверх старого)
-  // — сохранение по blur или Enter
+  // — при фокусе значение выделяется
+  // — при blur/Enter если ЦИФРА ИЗМЕНИЛАСЬ — открываем выбор фото
+  //   и сохранение происходит ТОЛЬКО после получения фото-доказательства.
+  //   Если фото не выбрано — значение откатывается к исходному.
   $('productsGrid').querySelectorAll('[data-qty-input]').forEach(inp => {
     inp.addEventListener('click', e => e.stopPropagation());
     inp.addEventListener('focus', e => {
       e.stopPropagation();
-      // Автовыделение всего содержимого — стирать ничего не надо вручную
+      // Запоминаем исходное значение чтобы можно было откатить если фото не выбрано
+      inp.dataset.originalValue = inp.value;
       try { inp.select(); } catch (_) {}
-      // На некоторых мобильных setSelectionRange срабатывает надёжнее
       try { inp.setSelectionRange(0, inp.value.length); } catch (_) {}
     });
     inp.addEventListener('blur', () => {
       const id = inp.dataset.qtyInput;
+      const original = parseInt(inp.dataset.originalValue, 10) || 0;
       let v = Math.max(0, parseInt(inp.value, 10) || 0);
       inp.value = v;
-      saveQtyInstant(id, v);
+      // Не изменилось — ничего не делаем
+      if (v === original) return;
+      // Изменилось → требуем фото-доказательство
+      requestPhotoForQtyChange(id, v, original, inp);
     });
     inp.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
     });
   });
+}
+
+/**
+ * Запрашивает фото-доказательство для изменения количества.
+ * Сохраняет контекст в state.pendingQtyChange и открывает выбор Камера/Галерея.
+ * Дальше — initPhotoChoiceSheet обрабатывает выбор файла или отмену.
+ */
+function requestPhotoForQtyChange(productId, newQty, originalQty, inputEl) {
+  state.pendingQtyChange = { productId, newQty, originalQty, inputEl };
+  state.pendingPhotoForProductId = productId;
+  const sheet = $('photoChoiceSheet');
+  if (sheet) {
+    sheet.classList.add('active');
+    // Показываем явное сообщение что фото обязательно
+    const hint = sheet.querySelector('.photo-choice-sheet__hint');
+    if (hint) hint.textContent = `Фото обязательно: ${originalQty} → ${newQty} шт`;
+  }
 }
 
 function buildCard(product, index) {
@@ -1783,7 +1906,6 @@ function buildCard(product, index) {
   // Значение в инпуте — это ТЕКУЩИЙ ввод за СЕГОДНЯ.
   // Если последний ввод был вчера или раньше → 0 (новый день, новый отсчёт).
   let stepperHtml = '';
-  let yesterdayHtml = '';
   if (isStaff()) {
     const inputQty = getCurrentInputQty(product, branch);
     stepperHtml = `
@@ -1799,19 +1921,51 @@ function buildCard(product, index) {
         />
         <span class="product-card__stepper-unit">шт</span>
       </div>`;
+  }
 
-    // «Вчера: X шт» — скромная подпись под названием товара (только если есть прошлый ввод)
-    const yest = getYesterdayInfo(product, branch);
-    if (yest) {
-      yesterdayHtml = `
-        <div class="product-card__yesterday">
-          <span class="product-card__yesterday-label">${escHtml(yest.label)}:</span>
-          <span class="product-card__yesterday-qty">${yest.qty} шт</span>
-        </div>`;
+  // «Вчера: X шт» — видно ВСЕМ (и сотруднику, и менеджеру).
+  // Для сотрудника — по его филиалу.
+  // Для менеджера: если активен конкретный филиал — по нему,
+  //                если активны «Все филиалы» — берём самый свежий по всем филиалам.
+  let yesterdayHtml = '';
+  let yest = null;
+  if (isStaff()) {
+    yest = getYesterdayInfo(product, branch);
+  } else {
+    // Менеджер
+    if (branch === 'all') {
+      // Берём самый свежий "вчера-или-раньше" из всех филиалов
+      let best = null;
+      for (const k of BRANCH_KEYS) {
+        const y = getYesterdayInfo(product, k);
+        if (y && (!best || y.ts > best.ts)) {
+          best = { ...y, branch: k };
+        }
+      }
+      yest = best;
+    } else {
+      yest = getYesterdayInfo(product, branch);
     }
   }
+  if (yest) {
+    // Для менеджера в режиме «все филиалы» добавим название филиала в подпись
+    const branchSuffix = (!isStaff() && branch === 'all' && yest.branch)
+      ? ` <span class="product-card__yesterday-branch">· ${BRANCH_LABELS[yest.branch] || ''}</span>`
+      : '';
+    yesterdayHtml = `
+      <div class="product-card__yesterday">
+        <span class="product-card__yesterday-label">${escHtml(yest.label)}:</span>
+        <span class="product-card__yesterday-qty">${yest.qty} шт</span>${branchSuffix}
+      </div>`;
+  }
+
+  // Класс has-photo-recent: горит зелёным 24 часа после загрузки фото-отчёта.
+  // Для сотрудника проверяем по его филиалу, для менеджера — по активному (или any).
+  const myBranchForProof = isStaff() ? userBranch() : (branch === 'all' ? null : branch);
+  const photoRecent = hasRecentProof(product.id, myBranchForProof);
+
   return `
-    <div class="product-card" data-id="${product.id}" style="animation-delay:${delay}ms">
+    <div class="product-card ${photoRecent ? 'has-photo-recent' : ''}" data-id="${product.id}" style="animation-delay:${delay}ms">
       <div class="product-card__image-wrap">
         ${imageHtml}
         ${cameraBtnHtml}
@@ -2459,6 +2613,11 @@ function switchPage(page) {
   const toolbar = $('mainToolbar');
   if (toolbar) toolbar.style.display = (page === 'products') ? '' : 'none';
 
+  // При уходе со страницы галереи — сбрасываем режим выбора
+  if (page !== 'gallery' && state.gallerySelectMode) {
+    exitGallerySelectMode();
+  }
+
   if (page === 'products')      renderAll();
   else if (page === 'gallery')  renderGalleryPage();
   else if (page === 'reports')  renderReportsPage();
@@ -2574,7 +2733,8 @@ function updateCardQtyDisplay(productId) {
   if (!product) return;
   const card = document.querySelector(`.product-card[data-id="${productId}"]`);
   if (!card) return;
-  const myBranch = userBranch();
+  const branch = state.activeBranch;
+  const myBranch = isStaff() ? userBranch() : branch;
   const qty = product.branches?.[myBranch] ?? 0;
   const target = product.targets?.[myBranch] ?? 0;
 
@@ -2604,47 +2764,65 @@ function updateCardQtyDisplay(productId) {
     }
   }
 
-  // Для сотрудника:
-  // — обновляем input на «текущее за сегодня» (если ввод был не сегодня → 0)
-  // — обновляем подпись «Вчера: X шт»
+  // Для сотрудника: обновляем input на «текущее за сегодня»
   if (isStaff()) {
     const inp = card.querySelector(`[data-qty-input="${productId}"]`);
     if (inp && document.activeElement !== inp) {
       inp.value = getCurrentInputQty(product, myBranch);
-    }
-
-    // Подпись «Вчера: X шт»
-    const yest = getYesterdayInfo(product, myBranch);
-    const body = card.querySelector('.product-card__body');
-    let yestEl = card.querySelector('.product-card__yesterday');
-    if (yest) {
-      const html = `
-        <span class="product-card__yesterday-label">${escHtml(yest.label)}:</span>
-        <span class="product-card__yesterday-qty">${yest.qty} шт</span>`;
-      if (yestEl) {
-        yestEl.innerHTML = html;
-      } else if (body) {
-        const div = document.createElement('div');
-        div.className = 'product-card__yesterday';
-        div.innerHTML = html;
-        // Вставляем после названия товара
-        const nameEl = body.querySelector('.product-card__name');
-        if (nameEl && nameEl.nextSibling) {
-          body.insertBefore(div, nameEl.nextSibling);
-        } else if (nameEl) {
-          nameEl.after(div);
-        } else {
-          body.appendChild(div);
-        }
-      }
-    } else if (yestEl) {
-      yestEl.remove();
     }
   } else {
     // Менеджер — простая синхронизация input если есть
     const inp = card.querySelector(`[data-qty-input="${productId}"]`);
     if (inp && document.activeElement !== inp) inp.value = qty;
   }
+
+  // ── Подпись «Вчера: X шт» — обновляем ДЛЯ ВСЕХ (и сотрудника, и менеджера) ──
+  let yest = null;
+  if (isStaff()) {
+    yest = getYesterdayInfo(product, myBranch);
+  } else if (branch === 'all') {
+    // Берём самый свежий из всех филиалов
+    let best = null;
+    for (const k of BRANCH_KEYS) {
+      const y = getYesterdayInfo(product, k);
+      if (y && (!best || y.ts > best.ts)) best = { ...y, branch: k };
+    }
+    yest = best;
+  } else {
+    yest = getYesterdayInfo(product, branch);
+  }
+
+  const body = card.querySelector('.product-card__body');
+  let yestEl = card.querySelector('.product-card__yesterday');
+  if (yest) {
+    const branchSuffix = (!isStaff() && branch === 'all' && yest.branch)
+      ? ` <span class="product-card__yesterday-branch">· ${BRANCH_LABELS[yest.branch] || ''}</span>`
+      : '';
+    const html = `
+      <span class="product-card__yesterday-label">${escHtml(yest.label)}:</span>
+      <span class="product-card__yesterday-qty">${yest.qty} шт</span>${branchSuffix}`;
+    if (yestEl) {
+      yestEl.innerHTML = html;
+    } else if (body) {
+      const div = document.createElement('div');
+      div.className = 'product-card__yesterday';
+      div.innerHTML = html;
+      const nameEl = body.querySelector('.product-card__name');
+      if (nameEl && nameEl.nextSibling) {
+        body.insertBefore(div, nameEl.nextSibling);
+      } else if (nameEl) {
+        nameEl.after(div);
+      } else {
+        body.appendChild(div);
+      }
+    }
+  } else if (yestEl) {
+    yestEl.remove();
+  }
+
+  // Обновляем класс has-photo-recent
+  const branchForProof = isStaff() ? userBranch() : (branch === 'all' ? null : branch);
+  card.classList.toggle('has-photo-recent', hasRecentProof(productId, branchForProof));
 }
 
 // Открываем выбор «Камера / Галерея» для товара
@@ -2659,14 +2837,29 @@ function initPhotoChoiceSheet() {
   const sheet = $('photoChoiceSheet');
   if (!sheet) return;
 
-  const close = () => {
+  // Закрытие. cancelled=true → откатываем цифру если была ожидающая смена.
+  const close = (cancelled = true) => {
     sheet.classList.remove('active');
+    // Очищаем подсказку
+    const hint = sheet.querySelector('.photo-choice-sheet__hint');
+    if (hint) hint.textContent = '';
+
+    if (cancelled && state.pendingQtyChange) {
+      // Откатываем цифру в инпуте к исходному значению
+      const pc = state.pendingQtyChange;
+      if (pc.inputEl) {
+        pc.inputEl.value = pc.originalQty;
+        pc.inputEl.dataset.originalValue = pc.originalQty;
+      }
+      showToast('Изменение отменено — фото обязательно', 'error');
+      state.pendingQtyChange = null;
+    }
     state.pendingPhotoForProductId = null;
   };
 
-  $('photoChoiceCancel').addEventListener('click', close);
+  $('photoChoiceCancel').addEventListener('click', () => close(true));
   sheet.addEventListener('click', e => {
-    if (e.target === sheet) close();
+    if (e.target === sheet) close(true);
   });
 
   const fileInput = $('inlinePhotoInput');
@@ -2683,27 +2876,71 @@ function initPhotoChoiceSheet() {
   fileInput.addEventListener('change', async e => {
     const file = e.target.files?.[0];
     const pid = state.pendingPhotoForProductId;
+    const pendingChange = state.pendingQtyChange;
     fileInput.value = '';
-    close();
-    if (!file || !pid) return;
+
+    if (!file || !pid) {
+      // Файл не выбран — откатываем как при отмене
+      close(true);
+      return;
+    }
+    // Файл выбран — закрываем БЕЗ отката (cancelled=false)
+    close(false);
+
     try {
       const dataUrl = await compressImage(file);
-      // СРАЗУ создаём отчёт с текущим количеством — не ждём смены цифры.
-      // Это починка бага: раньше отчёт уходил только при следующем изменении остатка,
-      // и если сотрудник просто фотографировал — менеджер ничего не видел.
-      await submitProofForProduct(pid, dataUrl);
+      if (pendingChange && pendingChange.productId === pid) {
+        // Это смена количества — сначала применяем новое количество, потом отправляем proof
+        applyStaffQtyChange(pid, pendingChange.newQty);
+        await submitProofForProduct(pid, dataUrl, pendingChange.newQty);
+        state.pendingQtyChange = null;
+      } else {
+        // Просто внеплановый фото-отчёт (без смены цифры)
+        await submitProofForProduct(pid, dataUrl);
+      }
     } catch (err) {
       console.error(err);
       showToast('Ошибка загрузки фото', 'error');
+      // При ошибке тоже откатываем
+      if (pendingChange?.inputEl) {
+        pendingChange.inputEl.value = pendingChange.originalQty;
+        pendingChange.inputEl.dataset.originalValue = pendingChange.originalQty;
+      }
+      state.pendingQtyChange = null;
     }
   });
+}
+
+/**
+ * Применяет новое количество к товару локально (для сотрудника).
+ * Используется когда сотрудник меняет цифру через blur — перед отправкой proof.
+ */
+function applyStaffQtyChange(productId, newQty) {
+  const product = state.products.find(p => p.id === productId);
+  if (!product) return;
+  const myBranch = userBranch();
+  const now = Date.now();
+  const userName = state.currentUser?.name || state.currentUser?.username || '';
+
+  const lastEntries = { ...(product.lastEntries || {}) };
+  lastEntries[myBranch] = { qty: newQty, ts: now, userName };
+
+  const updated = {
+    ...product,
+    branches: { ...product.branches, [myBranch]: newQty },
+    lastEntries,
+  };
+  const idx = state.products.findIndex(p => p.id === productId);
+  if (idx > -1) state.products[idx] = updated;
+  saveLocal(STORAGE_KEY, state.products);
+  updateCardQtyDisplay(productId);
 }
 
 /**
  * Создаёт отчёт-доказательство (proof) для товара.
  * Вызывается СРАЗУ после прикрепления фото — менеджер увидит отчёт в галерее и в отчётах.
  */
-async function submitProofForProduct(productId, photoDataUrl) {
+async function submitProofForProduct(productId, photoDataUrl, forceQty) {
   const product = state.products.find(p => p.id === productId);
   if (!product) {
     showToast('Товар не найден', 'error');
@@ -2714,7 +2951,11 @@ async function submitProofForProduct(productId, photoDataUrl) {
     showToast('Не определён ваш филиал', 'error');
     return;
   }
-  const myInputQty = getCurrentInputQty(product, myBranch);
+  // Если передан forceQty — используем его (это пришло из ожидающей смены).
+  // Иначе берём текущее значение за сегодня (внеплановое фото без смены цифры).
+  const myInputQty = (typeof forceQty === 'number')
+    ? forceQty
+    : getCurrentInputQty(product, myBranch);
   const target = product.targets?.[myBranch] ?? 0;
   const userName = state.currentUser?.name || state.currentUser?.username || '';
   const now = Date.now();
@@ -2740,7 +2981,7 @@ async function submitProofForProduct(productId, photoDataUrl) {
       `"${product.name}": ${myInputQty} шт${target ? ` / норма ${target}` : ''}`,
       { productId, productName: product.name, newQty: myInputQty, target });
 
-    // Обновляем lastEntries в товаре — фиксируем что сегодня было замечено столько
+    // Обновляем товар: branches + lastEntries (для подписи «Вчера: X»)
     const lastEntries = { ...(product.lastEntries || {}) };
     lastEntries[myBranch] = { qty: myInputQty, ts: now, userName };
     const updated = {
@@ -2753,13 +2994,12 @@ async function submitProofForProduct(productId, photoDataUrl) {
     saveLocal(STORAGE_KEY, state.products);
     await fbSaveProduct(updated);
 
-    // Визуальная индикация в карточке — отметка что фото прикреплено
+    // Визуальная индикация: класс has-photo-recent поставится автоматически
+    // при следующем renderAll() благодаря функции hasRecentProof().
+    // Делаем мягкий ререндер карточки чтобы галочка появилась сразу.
+    updateCardQtyDisplay(productId);
     const card = document.querySelector(`.product-card[data-id="${productId}"]`);
-    if (card) {
-      card.classList.add('has-photo');
-      // Через 2 секунды убираем метку — иначе остаётся «залипшая» галочка
-      setTimeout(() => card.classList.remove('has-photo'), 2200);
-    }
+    if (card) card.classList.add('has-photo-recent');
 
     showToast(`Отчёт отправлен менеджеру: ${myInputQty} шт`, 'success');
   } catch (err) {
@@ -2849,9 +3089,33 @@ function initGalleryEvents() {
       document.querySelectorAll('#galleryFilters .reports-filter-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.galleryFilter = btn.dataset.gfilter;
+      // При смене фильтра сбрасываем выбор
+      state.gallerySelected.clear();
       renderGalleryPage();
     });
   });
+
+  // ── Режим выбора (iPhone-style) ──
+  const selectBtn = $('gallerySelectBtn');
+  if (selectBtn) {
+    selectBtn.addEventListener('click', toggleGallerySelectMode);
+  }
+  const cancelBtn = $('gallerySelectCancel');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', exitGallerySelectMode);
+  }
+  const selectAllBtn = $('gallerySelectAll');
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', selectAllVisibleGalleryItems);
+  }
+  const shareBtn = $('gallerySelectShare');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', shareSelectedGalleryItems);
+  }
+  const delBtn = $('gallerySelectDelete');
+  if (delBtn) {
+    delBtn.addEventListener('click', deleteSelectedGalleryItems);
+  }
 }
 
 function renderGalleryPage() {
@@ -2860,6 +3124,7 @@ function renderGalleryPage() {
   const subText = $('galleryPageSub');
   if (!grid) return;
 
+  // Подзаголовок
   if (subText) {
     if (isStaff()) {
       subText.textContent = `Фото товаров вашего филиала`;
@@ -2870,6 +3135,7 @@ function renderGalleryPage() {
     }
   }
 
+  // Фильтрация
   let list = [...state.proofs];
   if (isStaff()) {
     list = list.filter(p => p.branch === userBranch());
@@ -2880,18 +3146,27 @@ function renderGalleryPage() {
   if (!list.length) {
     grid.innerHTML = '';
     empty.style.display = 'flex';
+    updateGalleryActionsBar();
     return;
   }
   empty.style.display = 'none';
 
+  const selecting = state.gallerySelectMode;
   grid.innerHTML = list.map((entry, i) => {
     const delay = Math.min(i * 25, 300);
     const branchLabel = BRANCH_LABELS[entry.branch] || entry.branch;
+    const isSelected = state.gallerySelected.has(entry.id);
     return `
-      <div class="gallery-card" data-proof-id="${escHtml(entry.id)}" style="animation-delay:${delay}ms">
+      <div class="gallery-card ${selecting ? 'gallery-card--selecting' : ''} ${isSelected ? 'gallery-card--selected' : ''}"
+           data-proof-id="${escHtml(entry.id)}" style="animation-delay:${delay}ms">
         <div class="gallery-card__image-wrap">
           <img class="gallery-card__image" src="${entry.photo}" alt="${escHtml(entry.productName)}" loading="lazy"/>
           <span class="gallery-card__branch-badge">${escHtml(branchLabel)}</span>
+          <span class="gallery-card__check" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </span>
         </div>
         <div class="gallery-card__body">
           <div class="gallery-card__name">${escHtml(entry.productName)}</div>
@@ -2900,13 +3175,438 @@ function renderGalleryPage() {
       </div>`;
   }).join('');
 
+  // ── Привязка обработчиков для каждой карточки
   grid.querySelectorAll('.gallery-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const id = card.dataset.proofId;
-      const entry = state.proofs.find(p => p.id === id);
-      if (entry) openLightbox(entry);
+    const id = card.dataset.proofId;
+
+    // Длинный тап (long-press) на мобильном → включить режим выбора
+    let pressTimer = null;
+    let isLongPress = false;
+    const startPress = () => {
+      if (state.gallerySelectMode) return;
+      isLongPress = false;
+      pressTimer = setTimeout(() => {
+        isLongPress = true;
+        enterGallerySelectMode();
+        toggleGallerySelection(id);
+        if (navigator.vibrate) navigator.vibrate(40); // тактильный отклик
+      }, 450);
+    };
+    const cancelPress = () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    };
+    card.addEventListener('touchstart', startPress, { passive: true });
+    card.addEventListener('touchend',   cancelPress);
+    card.addEventListener('touchmove',  cancelPress);
+    card.addEventListener('touchcancel',cancelPress);
+    card.addEventListener('mousedown',  startPress);
+    card.addEventListener('mouseup',    cancelPress);
+    card.addEventListener('mouseleave', cancelPress);
+
+    // Обычный тап
+    card.addEventListener('click', e => {
+      if (isLongPress) { isLongPress = false; return; }
+      if (state.gallerySelectMode) {
+        // В режиме выбора — тап переключает выбор
+        toggleGallerySelection(id);
+      } else {
+        // Обычный режим — открываем lightbox
+        const entry = state.proofs.find(p => p.id === id);
+        if (entry) openLightbox(entry);
+      }
     });
   });
+
+  updateGalleryActionsBar();
+}
+
+/* ===========================================================
+   ГАЛЕРЕЯ — РЕЖИМ ВЫБОРА (iPhone-style)
+=========================================================== */
+function enterGallerySelectMode() {
+  if (state.gallerySelectMode) return;
+  state.gallerySelectMode = true;
+  state.gallerySelected.clear();
+  document.body.classList.add('gallery-selecting');
+  $('galleryActionsBar').classList.add('active');
+  $('gallerySelectBtn').classList.add('active');
+  $('gallerySelectBtn').querySelector('span').textContent = 'Готово';
+  renderGalleryPage();
+}
+
+function exitGallerySelectMode() {
+  if (!state.gallerySelectMode) return;
+  state.gallerySelectMode = false;
+  state.gallerySelected.clear();
+  document.body.classList.remove('gallery-selecting');
+  $('galleryActionsBar').classList.remove('active');
+  $('gallerySelectBtn').classList.remove('active');
+  $('gallerySelectBtn').querySelector('span').textContent = 'Выбрать';
+  renderGalleryPage();
+}
+
+function toggleGallerySelectMode() {
+  if (state.gallerySelectMode) exitGallerySelectMode();
+  else enterGallerySelectMode();
+}
+
+function toggleGallerySelection(proofId) {
+  if (state.gallerySelected.has(proofId)) {
+    state.gallerySelected.delete(proofId);
+  } else {
+    state.gallerySelected.add(proofId);
+  }
+  // Обновляем только конкретную карточку и панель — без перерисовки всего
+  const card = document.querySelector(`.gallery-card[data-proof-id="${proofId}"]`);
+  if (card) card.classList.toggle('gallery-card--selected', state.gallerySelected.has(proofId));
+  updateGalleryActionsBar();
+}
+
+function selectAllVisibleGalleryItems() {
+  // Берём список фото с учётом текущих фильтров — то что реально видно на экране
+  let list = [...state.proofs];
+  if (isStaff()) {
+    list = list.filter(p => p.branch === userBranch());
+  } else if (state.galleryFilter !== 'all') {
+    list = list.filter(p => p.branch === state.galleryFilter);
+  }
+  // Если уже все выбраны — снимаем выбор
+  const allSelected = list.length > 0 && list.every(p => state.gallerySelected.has(p.id));
+  if (allSelected) {
+    state.gallerySelected.clear();
+  } else {
+    list.forEach(p => state.gallerySelected.add(p.id));
+  }
+  renderGalleryPage();
+}
+
+function updateGalleryActionsBar() {
+  const count = state.gallerySelected.size;
+  const countEl = $('gallerySelectCount');
+  if (countEl) countEl.textContent = `Выбрано: ${count}`;
+  const shareBtn = $('gallerySelectShare');
+  const delBtn   = $('gallerySelectDelete');
+  if (shareBtn) shareBtn.disabled = count === 0;
+  if (delBtn)   delBtn.disabled   = count === 0;
+}
+
+/**
+ * Поделиться выбранными фото.
+ * Использует Web Share API (на мобильных откроется системное меню «Поделиться»,
+ * в котором доступен Telegram, WhatsApp и т.д.).
+ * Если Web Share API недоступен — открывается Telegram-ссылка с текстом.
+ */
+async function shareSelectedGalleryItems() {
+  const ids = Array.from(state.gallerySelected);
+  if (!ids.length) return;
+  const items = ids.map(id => state.proofs.find(p => p.id === id)).filter(Boolean);
+  if (!items.length) return;
+
+  // Готовим файлы из base64 dataURL
+  const files = [];
+  for (const item of items) {
+    if (!item.photo) continue;
+    try {
+      const blob = await dataUrlToBlob(item.photo);
+      const safeName = (item.productName || 'photo')
+        .replace(/[^\p{L}\p{N}_\- ]/gu, '')
+        .replace(/\s+/g, '_')
+        .slice(0, 40);
+      const fileName = `${safeName}_${new Date(item.ts).toISOString().slice(0,10)}.jpg`;
+      files.push(new File([blob], fileName, { type: 'image/jpeg' }));
+    } catch (e) {
+      console.warn('dataUrl→blob fail', e);
+    }
+  }
+
+  // Текстовое описание для подписи
+  const summary = items.map(it => {
+    const dt = new Date(it.ts).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
+    const branch = BRANCH_LABELS[it.branch] || '';
+    return `• ${it.productName} — ${it.qty} шт (${branch}, ${dt})`;
+  }).join('\n');
+  const title = `Отчёт по остаткам — ${items.length} фото`;
+  const text = `Склад Mone\n\n${summary}`;
+
+  // Пробуем Web Share API (на iOS/Android это открывает системное меню,
+  // включая Telegram, WhatsApp и т.д.)
+  if (navigator.canShare && files.length && navigator.canShare({ files })) {
+    try {
+      await navigator.share({ files, title, text });
+      showToast(`Поделено: ${items.length} фото`, 'success');
+      return;
+    } catch (err) {
+      // Пользователь отменил — это нормально
+      if (err.name !== 'AbortError') {
+        console.warn('share files failed', err);
+      } else {
+        return; // отмена — выходим без фолбэка
+      }
+    }
+  }
+
+  // Фолбэк: пытаемся поделиться без файлов (только текст)
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text });
+      showToast('Текст отправлен. Файлы вложите вручную.', 'success');
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+    }
+  }
+
+  // Последний фолбэк: открываем Telegram-ссылку с текстом отчёта
+  // Файлы пользователю придётся вложить отдельно
+  const tgUrl = `https://t.me/share/url?url=${encodeURIComponent('Склад Mone')}&text=${encodeURIComponent(text)}`;
+  window.open(tgUrl, '_blank');
+  showToast('Открываю Telegram. Фото вложите вручную.', 'success');
+}
+
+/** Конвертирует data URL в Blob */
+function dataUrlToBlob(dataUrl) {
+  return new Promise((resolve, reject) => {
+    try {
+      const parts = dataUrl.split(',');
+      const meta = parts[0];
+      const b64  = parts[1];
+      const mime = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+      const bin  = atob(b64);
+      const len  = bin.length;
+      const u8   = new Uint8Array(len);
+      for (let i = 0; i < len; i++) u8[i] = bin.charCodeAt(i);
+      resolve(new Blob([u8], { type: mime }));
+    } catch (e) { reject(e); }
+  });
+}
+
+/** Удалить выбранные фото-отчёты */
+async function deleteSelectedGalleryItems() {
+  const ids = Array.from(state.gallerySelected);
+  if (!ids.length) return;
+  const count = ids.length;
+  if (!confirm(`Удалить ${count} ${count === 1 ? 'фото' : count < 5 ? 'фото' : 'фото'}? Это действие нельзя отменить.`)) return;
+
+  showToast(`Удаление ${count} фото...`);
+  let okCount = 0;
+  for (const id of ids) {
+    try {
+      await fbDeleteProof(id);
+      okCount++;
+    } catch (e) {
+      console.error('Delete proof failed:', id, e);
+    }
+  }
+  // Локально подчищаем
+  state.proofs = state.proofs.filter(p => !state.gallerySelected.has(p.id));
+  saveLocal(PROOFS_CACHE, state.proofs);
+
+  exitGallerySelectMode();
+  showToast(`Удалено: ${okCount} ${okCount === 1 ? 'фото' : 'фото'}`, 'success');
+}
+
+/* Firebase: удаление proof */
+async function fbDeleteProof(proofId) {
+  try { await remove(ref(db, `proofs/${proofId}`)); }
+  catch (e) { console.error('fbDeleteProof error:', e); throw e; }
+}
+
+/* ===========================================================
+   BACKUP & CLEANUP — резервные копии и автоочистка фото
+=========================================================== */
+
+/** Возвращает количество proof'ов старше 60 дней */
+function countOldProofs() {
+  if (!state.proofs?.length) return 0;
+  const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  return state.proofs.filter(p => p.ts < cutoff).length;
+}
+
+/** Обновляет текст на кнопке очистки чтобы менеджер видел сколько фото будет удалено */
+function updateCleanupBtnLabel() {
+  const cnt = countOldProofs();
+  const lbl = $('cleanupBtnLabel');
+  if (!lbl) return;
+  if (cnt === 0) {
+    lbl.textContent = 'Нет фото старше 60 дней';
+  } else {
+    lbl.textContent = `Удалить ${cnt} ${cnt === 1 ? 'фото' : 'фото'} старше 60 дней`;
+  }
+}
+
+/**
+ * Удаляет все фото-отчёты старше 60 дней.
+ * @param {boolean} interactive - если true, спрашивает подтверждение и показывает тосты
+ */
+async function cleanupOldProofs(interactive = false) {
+  if (!isManager()) return 0;
+  const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  const oldOnes = state.proofs.filter(p => p.ts < cutoff);
+  if (!oldOnes.length) {
+    if (interactive) showToast('Нет фото старше 60 дней', 'success');
+    return 0;
+  }
+
+  if (interactive) {
+    const ok = confirm(`Удалить ${oldOnes.length} фото-отчётов старше 60 дней? Это действие нельзя отменить.`);
+    if (!ok) return 0;
+    showToast(`Удаление ${oldOnes.length} фото...`);
+  }
+
+  let okCount = 0;
+  for (const p of oldOnes) {
+    try {
+      await fbDeleteProof(p.id);
+      okCount++;
+    } catch (e) {
+      console.error('cleanupOldProofs:', e);
+    }
+  }
+  // Локально подчищаем
+  state.proofs = state.proofs.filter(p => p.ts >= cutoff);
+  saveLocal(PROOFS_CACHE, state.proofs);
+
+  if (interactive) {
+    showToast(`Удалено: ${okCount} фото`, 'success');
+    updateCleanupBtnLabel();
+  } else {
+    console.log(`[auto-cleanup] Удалено ${okCount} старых фото-отчётов`);
+  }
+  return okCount;
+}
+
+/** Скачивает все данные в JSON-файл */
+async function downloadBackup() {
+  if (!isManager()) {
+    showToast('Только менеджер может делать бэкап', 'error');
+    return;
+  }
+
+  showToast('Готовлю резервную копию...');
+
+  // Берём свежие данные из Firebase, чтобы бэкап был актуальным даже если localState устарел
+  let products = state.products, accounts = state.accounts, categories = state.categories, proofs = state.proofs;
+  try {
+    const [pSnap, aSnap, cSnap, prSnap] = await Promise.all([
+      get(PRODUCTS_REF), get(ACCOUNTS_REF), get(CATEGORIES_REF), get(PROOFS_REF),
+    ]);
+    if (pSnap.exists())  products   = Object.values(pSnap.val());
+    if (aSnap.exists())  accounts   = Object.values(aSnap.val());
+    if (cSnap.exists())  categories = Object.values(cSnap.val());
+    if (prSnap.exists()) proofs     = Object.values(prSnap.val());
+  } catch (e) {
+    console.warn('Backup: не удалось получить свежие данные, использую кеш', e);
+  }
+
+  const backup = {
+    appName: 'Склад Mone',
+    backupVersion: 1,
+    exportedAt: new Date().toISOString(),
+    exportedAtLocal: new Date().toLocaleString('ru-RU'),
+    counts: {
+      products: products.length,
+      accounts: accounts.length,
+      categories: categories.length,
+      proofs: proofs.length,
+    },
+    products,
+    accounts,
+    categories,
+    proofs,
+  };
+
+  // Сериализация может быть тяжёлой если много фото — делаем в Blob
+  let blob;
+  try {
+    const json = JSON.stringify(backup, null, 2);
+    blob = new Blob([json], { type: 'application/json' });
+  } catch (e) {
+    showToast('Слишком большой объём данных для бэкапа', 'error');
+    return;
+  }
+
+  // Скачивание
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toLocaleDateString('ru-RU').replaceAll('.', '-');
+  a.href = url;
+  a.download = `Mone_backup_${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  await writeLog('userEdit', `Скачана резервная копия: ${backup.counts.products} товаров, ${backup.counts.proofs} фото`);
+  showToast(`Скачано: Mone_backup_${dateStr}.json`, 'success');
+}
+
+/** Восстанавливает данные из JSON-файла */
+async function restoreBackup(event) {
+  if (!isManager()) return;
+  const file = event.target.files?.[0];
+  event.target.value = '';
+  if (!file) return;
+
+  let backup;
+  try {
+    const text = await file.text();
+    backup = JSON.parse(text);
+  } catch (e) {
+    showToast('Не удалось прочитать файл — неверный JSON', 'error');
+    return;
+  }
+
+  if (!backup || backup.appName !== 'Склад Mone') {
+    showToast('Это не файл резервной копии Склад Mone', 'error');
+    return;
+  }
+
+  const counts = backup.counts || {};
+  const exported = backup.exportedAtLocal || backup.exportedAt || 'неизвестно';
+  const ok = confirm(
+    `Восстановить резервную копию от ${exported}?\n\n` +
+    `Товаров: ${counts.products || 0}\n` +
+    `Аккаунтов: ${counts.accounts || 0}\n` +
+    `Категорий: ${counts.categories || 0}\n` +
+    `Фото-отчётов: ${counts.proofs || 0}\n\n` +
+    `ТЕКУЩИЕ ДАННЫЕ БУДУТ ЗАМЕНЕНЫ. Продолжить?`
+  );
+  if (!ok) return;
+
+  showToast('Восстанавливаю данные...');
+
+  try {
+    // Восстанавливаем по очереди — products, categories, accounts, proofs
+    const writes = [];
+
+    if (Array.isArray(backup.products)) {
+      const obj = {};
+      backup.products.forEach(p => { if (p && p.id) obj[p.id] = p; });
+      writes.push(set(PRODUCTS_REF, obj));
+    }
+    if (Array.isArray(backup.categories)) {
+      const obj = {};
+      backup.categories.forEach(c => { if (c && c.id) obj[c.id] = c; });
+      writes.push(set(CATEGORIES_REF, obj));
+    }
+    if (Array.isArray(backup.accounts)) {
+      const obj = {};
+      backup.accounts.forEach(a => { if (a && a.id) obj[a.id] = a; });
+      writes.push(set(ACCOUNTS_REF, obj));
+    }
+    if (Array.isArray(backup.proofs)) {
+      const obj = {};
+      backup.proofs.forEach(p => { if (p && p.id) obj[p.id] = p; });
+      writes.push(set(PROOFS_REF, obj));
+    }
+
+    await Promise.all(writes);
+    await writeLog('userEdit', `Восстановлена резервная копия от ${exported}`);
+    showToast('Данные восстановлены', 'success');
+  } catch (e) {
+    console.error('restoreBackup error:', e);
+    showToast('Ошибка восстановления — проверьте подключение', 'error');
+  }
 }
 
 /* ===========================================================
@@ -2980,7 +3680,7 @@ function initReportsEvents() {
   }
 
   // Кнопка Excel в шапке отчётов
-  $('reportsExcelBtn').addEventListener('click', exportToExcel);
+  $('reportsExcelBtn').addEventListener('click', openExcelDateModal);
 }
 
 function getFilteredProofs() {
@@ -3141,6 +3841,181 @@ function renderReportsPage() {
    Это экспорт ОТЧЁТОВ от сотрудников (страница Отчёты).
    Стиль: красивая шапка, чёткие границы, без эмодзи и категорий.
 =========================================================== */
+
+/* ===========================================================
+   EXCEL DATE PICKER — выбор даты/диапазона перед скачиванием
+=========================================================== */
+function initExcelDateModal() {
+  const modal = $('excelDateModal');
+  if (!modal) return;
+
+  $('excelDateClose').addEventListener('click', () => closeOverlay(modal));
+  $('excelDateCancel').addEventListener('click', () => closeOverlay(modal));
+  modal.addEventListener('click', e => { if (e.target === modal) closeOverlay(modal); });
+
+  // Пресеты по дате — только кнопки внутри .date-picker__presets
+  modal.querySelectorAll('.date-picker__presets .date-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.date-picker__presets .date-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.excelDateMode = btn.dataset.preset;
+      applyExcelDatePreset();
+      refreshExcelDateInfo();
+    });
+  });
+
+  // Выбор филиала в модалке — кнопки внутри .date-picker__branches
+  modal.querySelectorAll('.date-picker__branches .date-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.date-picker__branches .date-preset').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.excelBranch = btn.dataset.xbranch;
+      refreshExcelDateInfo();
+    });
+  });
+
+  // Ручной ввод дат — переключаем режим в "custom"
+  ['excelDateFrom', 'excelDateTo'].forEach(id => {
+    $(id).addEventListener('change', () => {
+      state.excelDateMode = 'custom';
+      modal.querySelectorAll('.date-picker__presets .date-preset').forEach(b => b.classList.remove('active'));
+      state.excelDateFrom = $('excelDateFrom').value || null;
+      state.excelDateTo   = $('excelDateTo').value   || null;
+      refreshExcelDateInfo();
+    });
+  });
+
+  $('excelDateDownload').addEventListener('click', () => {
+    closeOverlay(modal);
+    exportToExcel();
+  });
+}
+
+function openExcelDateModal() {
+  if (!isManager()) {
+    showToast('Только менеджер может выгружать Excel', 'error');
+    return;
+  }
+  const modal = $('excelDateModal');
+  // По умолчанию — сегодня и все филиалы
+  state.excelDateMode = 'today';
+  state.excelBranch   = 'all';
+  modal.querySelectorAll('.date-picker__presets .date-preset').forEach(b => {
+    b.classList.toggle('active', b.dataset.preset === 'today');
+  });
+  modal.querySelectorAll('.date-picker__branches .date-preset').forEach(b => {
+    b.classList.toggle('active', b.dataset.xbranch === 'all');
+  });
+  applyExcelDatePreset();
+  refreshExcelDateInfo();
+  openOverlay(modal);
+}
+
+/** Применяет выбранный пресет — заполняет поля «С» и «По» */
+function applyExcelDatePreset() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const toStr = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  };
+
+  let from = null, to = null;
+  switch (state.excelDateMode) {
+    case 'today': {
+      from = toStr(today);
+      to   = toStr(today);
+      break;
+    }
+    case 'yesterday': {
+      const y = new Date(today);
+      y.setDate(y.getDate() - 1);
+      from = toStr(y);
+      to   = toStr(y);
+      break;
+    }
+    case 'week': {
+      const w = new Date(today);
+      w.setDate(w.getDate() - 6);
+      from = toStr(w);
+      to   = toStr(today);
+      break;
+    }
+    case 'month': {
+      const m = new Date(today);
+      m.setDate(m.getDate() - 29);
+      from = toStr(m);
+      to   = toStr(today);
+      break;
+    }
+    case 'all': {
+      from = null;
+      to   = null;
+      break;
+    }
+  }
+
+  state.excelDateFrom = from;
+  state.excelDateTo   = to;
+  $('excelDateFrom').value = from || '';
+  $('excelDateTo').value   = to   || '';
+}
+
+/** Подсчёт сколько отчётов попадает в выбранный диапазон */
+function getExcelFilteredProofs() {
+  let list = [...state.proofs];
+
+  // Фильтр по филиалу — берём из модалки Excel, а не из reportsBranchFilter.
+  // Это позволяет менеджеру скачать отчёт по нужному филиалу,
+  // не сбрасывая фильтры на странице отчётов.
+  const branch = state.excelBranch || 'all';
+  if (branch !== 'all') {
+    list = list.filter(p => p.branch === branch);
+  }
+
+  // Категория и поиск НЕ применяются — для Excel нужны ВСЕ товары за дату,
+  // а не отфильтрованные на странице. Это была частая причина «не вижу вилок»:
+  // на странице отчётов был залипший поиск/категория.
+
+  // Фильтр по дате
+  if (state.excelDateFrom) {
+    const fromDt = new Date(state.excelDateFrom + 'T00:00:00');
+    fromDt.setHours(0, 0, 0, 0);
+    const fromTs = fromDt.getTime();
+    list = list.filter(p => p.ts >= fromTs);
+  }
+  if (state.excelDateTo) {
+    const toDt = new Date(state.excelDateTo + 'T00:00:00');
+    toDt.setHours(23, 59, 59, 999);
+    const toTs = toDt.getTime();
+    list = list.filter(p => p.ts <= toTs);
+  }
+  return list;
+}
+
+function refreshExcelDateInfo() {
+  const list = getExcelFilteredProofs();
+  $('excelDateCount').textContent = list.length;
+  // Подзаголовок: текст текущего выбора
+  const sub = $('excelDateSub');
+  if (state.excelDateMode === 'all') {
+    sub.textContent = 'За всё время';
+  } else if (state.excelDateFrom && state.excelDateTo) {
+    if (state.excelDateFrom === state.excelDateTo) {
+      const d = new Date(state.excelDateFrom + 'T00:00:00');
+      sub.textContent = `За ${d.toLocaleDateString('ru-RU', { day:'2-digit', month:'long', year:'numeric' })}`;
+    } else {
+      const df = new Date(state.excelDateFrom + 'T00:00:00').toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit' });
+      const dt = new Date(state.excelDateTo + 'T00:00:00').toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'2-digit' });
+      sub.textContent = `Период: ${df} — ${dt}`;
+    }
+  } else {
+    sub.textContent = 'Выберите дату или диапазон';
+  }
+}
+
 function exportToExcel() {
   if (!isManager()) {
     showToast('Только менеджер может выгружать Excel', 'error');
@@ -3151,14 +4026,14 @@ function exportToExcel() {
     return;
   }
 
-  const list = getFilteredProofs();
+  const list = getExcelFilteredProofs();
   if (!list.length) {
-    showToast('Нет данных для экспорта', 'error');
+    showToast('Нет данных для экспорта за выбранный период', 'error');
     return;
   }
 
-  // ── Определяем текущий филиал для отчёта
-  const branchFilter = state.reportsBranchFilter || 'all';
+  // ── Определяем филиал из модалки Excel (а не из reportsBranchFilter)
+  const branchFilter = state.excelBranch || 'all';
   const branchTitle = branchFilter === 'all'
     ? 'Все филиалы'
     : BRANCH_LABELS[branchFilter] || branchFilter;
@@ -3227,11 +4102,21 @@ function exportToExcel() {
   //   Row N+1 (пустая)
   //   Row N+2: ИТОГО
 
-  // Период
-  const dates = list.map(p => p.ts).sort((a, b) => a - b);
-  const periodFrom = new Date(dates[0]).toLocaleDateString('ru-RU');
-  const periodTo   = new Date(dates[dates.length - 1]).toLocaleDateString('ru-RU');
-  const periodStr = periodFrom === periodTo ? periodFrom : `${periodFrom} — ${periodTo}`;
+  // Период — берём из выбранного диапазона если он задан, иначе из реальных дат
+  let periodStr;
+  if (state.excelDateMode === 'all' || (!state.excelDateFrom && !state.excelDateTo)) {
+    const dates = list.map(p => p.ts).sort((a, b) => a - b);
+    const periodFrom = new Date(dates[0]).toLocaleDateString('ru-RU');
+    const periodTo   = new Date(dates[dates.length - 1]).toLocaleDateString('ru-RU');
+    periodStr = periodFrom === periodTo ? periodFrom : `${periodFrom} — ${periodTo}`;
+  } else if (state.excelDateFrom === state.excelDateTo && state.excelDateFrom) {
+    const d = new Date(state.excelDateFrom + 'T00:00:00');
+    periodStr = d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+  } else {
+    const df = new Date(state.excelDateFrom + 'T00:00:00').toLocaleDateString('ru-RU');
+    const dt = new Date(state.excelDateTo + 'T00:00:00').toLocaleDateString('ru-RU');
+    periodStr = `${df} — ${dt}`;
+  }
 
   const wsData = [
     ['СКЛАД MONE'],                                                                       // 0
@@ -3492,10 +4377,19 @@ function exportToExcel() {
     : (BRANCH_LABELS[branchFilter] || 'Отчёт').slice(0, 31);
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
-  // ── Имя файла
-  const dateStr = new Date().toLocaleDateString('ru-RU').replaceAll('.', '-');
+  // ── Имя файла — отражает филиал и период
+  let datePart;
+  if (state.excelDateMode === 'all' || (!state.excelDateFrom && !state.excelDateTo)) {
+    datePart = 'все_даты';
+  } else if (state.excelDateFrom === state.excelDateTo) {
+    datePart = state.excelDateFrom.replaceAll('-', '');
+  } else {
+    const f = (state.excelDateFrom || '').replaceAll('-', '');
+    const t = (state.excelDateTo   || '').replaceAll('-', '');
+    datePart = `${f}_${t}`;
+  }
   const branchSlug = branchFilter === 'all' ? 'Все_филиалы' : (BRANCH_LABELS[branchFilter] || 'Отчёт').replace(/\s+/g, '_');
-  const fileName = `Mone_Отчёт_${branchSlug}_${dateStr}.xlsx`;
+  const fileName = `Mone_Отчёт_${branchSlug}_${datePart}.xlsx`;
 
   XLSX.writeFile(wb, fileName);
   showToast(`Скачано: ${fileName}`, 'success');
@@ -3522,6 +4416,60 @@ function init() {
   // Запускаем основную инициализацию параллельно (Firebase, авторизация),
   // чтобы пока сплеш анимируется — данные уже подгрузились.
   initAuth();
+
+  // PWA: регистрируем Service Worker и слушаем событие установки
+  registerServiceWorker();
+  initInstallPrompt();
+}
+
+/* ===========================================================
+   PWA — установка на главный экран
+=========================================================== */
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js', { scope: './' })
+      .then(reg => {
+        // Каждый час проверяем обновления
+        setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+      })
+      .catch(err => console.warn('[PWA] SW registration failed:', err));
+  });
+}
+
+let _deferredInstallPrompt = null;
+function initInstallPrompt() {
+  // Chrome/Android: сам вызывает событие когда установка возможна
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    const btn = $('installAppBtn');
+    if (btn) btn.style.display = '';
+  });
+  window.addEventListener('appinstalled', () => {
+    _deferredInstallPrompt = null;
+    const btn = $('installAppBtn');
+    if (btn) btn.style.display = 'none';
+    showToast('Приложение установлено', 'success');
+  });
+}
+
+/** Запускает установку PWA. На iOS показывает инструкцию (там нет API). */
+async function triggerInstallPrompt() {
+  if (!_deferredInstallPrompt) {
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      alert('Чтобы установить приложение на iPhone:\n\n1. Нажмите кнопку «Поделиться» в Safari\n2. Прокрутите вниз\n3. Выберите «На экран Домой»\n\nИконка появится на главном экране.');
+    } else {
+      showToast('Откройте сайт в Chrome или Edge для установки', 'error');
+    }
+    return;
+  }
+  _deferredInstallPrompt.prompt();
+  const choice = await _deferredInstallPrompt.userChoice;
+  if (choice.outcome === 'accepted') {
+    showToast('Устанавливается...', 'success');
+  }
+  _deferredInstallPrompt = null;
 }
 
 if (document.readyState === 'loading') {
